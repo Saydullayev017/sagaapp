@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out/preload",
+    "composite": true,
+    "rootDir": "electron/preload"
+  },
+  "include": ["electron/preload/**/*"]
+}
