@@ -1,0 +1,40 @@
+# Логи
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Зависимости
+node_modules/
+
+# Сборка TypeScript
+dist/
+build/
+out/
+
+# Настройки IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Переменные окружения
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Кэш
+.cache/
+.turbo/
+
+# Операционные системы
+.DS_Store
+Thumbs.db
+
+# Тестовые покрытия
+coverage/
+.nyc_output/
+
+# Конфигурации
+*.tsbuildinfo

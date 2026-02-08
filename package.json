@@ -1,0 +1,27 @@
+{
+  "name": "japp",
+  "version": "1.0.0",
+  "description": "A modern Markdown editor with Git integration",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saydullayev017/Japp.git"
+  },
+  "keywords": ["markdown", "editor", "electron", "git"],
+  "author": "Your Name",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Saydullayev017/Japp/issues"
+  },
+  "homepage": "https://github.com/Saydullayev017/Japp#readme",
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "electron-vite": "^2.0.0"
+  }
+}
