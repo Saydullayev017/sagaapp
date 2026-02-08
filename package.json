@@ -12,8 +12,13 @@
     "type": "git",
     "url": "git+https://github.com/Saydullayev017/Japp.git"
   },
-  "keywords": ["markdown", "editor", "electron", "git"],
-  "author": "Your Name",
+  "keywords": [
+    "markdown",
+    "editor",
+    "electron",
+    "git"
+  ],
+  "author": "Saydullayev Javlonbek",
   "license": "MIT",
   "type": "commonjs",
   "bugs": {
@@ -21,7 +26,9 @@
   },
   "homepage": "https://github.com/Saydullayev017/Japp#readme",
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "electron-vite": "^2.0.0"
+    "@types/node": "^25.2.2",
+    "electron": "^40.2.1",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.3.3"
   }
 }
