@@ -7,43 +7,43 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/main/index.ts')
-        }
-      }
+          index: resolve(__dirname, 'electron/main/index.ts'),
+        },
+      },
     },
     resolve: {
       alias: {
-        '@shared': resolve(__dirname, 'electron/shared')
-      }
-    }
+        '@shared': resolve(__dirname, 'electron/shared'),
+      },
+    },
   },
   preload: {
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/preload/index.ts')
-        }
-      }
+          index: resolve(__dirname, 'electron/preload/index.ts'),
+        },
+      },
     },
     resolve: {
       alias: {
-        '@shared': resolve(__dirname, 'electron/shared')
-      }
-    }
+        '@shared': resolve(__dirname, 'electron/shared'),
+      },
+    },
   },
   renderer: {
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/index.html')
-        }
-      }
+          index: resolve(__dirname, 'src/index.html'),
+        },
+      },
     },
     resolve: {
       alias: {
         '@renderer': resolve(__dirname, 'src'),
-        '@shared': resolve(__dirname, 'electron/shared')
-      }
-    }
-  }
+        '@shared': resolve(__dirname, 'electron/shared'),
+      },
+    },
+  },
 })

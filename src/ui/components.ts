@@ -1,8 +1,8 @@
 export function initializeUI(): void {
-    const app = document.getElementById('app')
-    if (!app) return
+  const app = document.getElementById('app')
+  if (!app) return
 
-    app.innerHTML = `
+  app.innerHTML = `
         <div class="window-controls">
             <button class="window-control minimize" data-action="minimize">−</button>
             <button class="window-control maximize" data-action="maximize">□</button>
@@ -49,52 +49,52 @@ export function initializeUI(): void {
         </div>
     `
 
-    // Добавляем обработчики событий
-    setupEventListeners()
+  // Добавляем обработчики событий
+  setupEventListeners()
 }
 
 function setupEventListeners(): void {
-    // Обработчики оконных кнопок
-    document.querySelectorAll('.window-control').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const action = (e.target as HTMLElement).dataset.action
-            handleWindowControl(action)
-        })
+  // Обработчики оконных кнопок
+  document.querySelectorAll('.window-control').forEach(button => {
+    button.addEventListener('click', e => {
+      const action = (e.target as HTMLElement).dataset.action
+      handleWindowControl(action)
     })
+  })
 
-    // Кнопка сохранения
-    document.getElementById('save-btn')?.addEventListener('click', () => {
-        console.log('Save clicked')
-        // Здесь будет логика сохранения
-    })
+  // Кнопка сохранения
+  document.getElementById('save-btn')?.addEventListener('click', () => {
+    console.log('Save clicked')
+    // Здесь будет логика сохранения
+  })
 
-    // Переключение превью
-    document.getElementById('preview-toggle')?.addEventListener('click', () => {
-        const preview = document.getElementById('preview')
-        if (preview) {
-            preview.classList.toggle('hidden')
-        }
-    })
+  // Переключение превью
+  document.getElementById('preview-toggle')?.addEventListener('click', () => {
+    const preview = document.getElementById('preview')
+    if (preview) {
+      preview.classList.toggle('hidden')
+    }
+  })
 
-    // Обновление файлов
-    document.getElementById('refresh-files')?.addEventListener('click', () => {
-        console.log('Refresh files clicked')
-        // Здесь будет логика обновления файлового дерева
-    })
+  // Обновление файлов
+  document.getElementById('refresh-files')?.addEventListener('click', () => {
+    console.log('Refresh files clicked')
+    // Здесь будет логика обновления файлового дерева
+  })
 }
 
 function handleWindowControl(action: string | undefined): void {
-    if (!action || !window.electronAPI) return
+  if (!action || !window.electronAPI) return
 
-    switch (action) {
-        case 'minimize':
-            window.electronAPI.minimizeWindow?.()
-            break
-        case 'maximize':
-            window.electronAPI.toggleMaximize?.()
-            break
-        case 'close':
-            window.electronAPI.closeWindow?.()
-            break
-    }
+  switch (action) {
+    case 'minimize':
+      window.electronAPI.minimizeWindow?.()
+      break
+    case 'maximize':
+      window.electronAPI.toggleMaximize?.()
+      break
+    case 'close':
+      window.electronAPI.closeWindow?.()
+      break
+  }
 }

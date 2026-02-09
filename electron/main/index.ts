@@ -1,4 +1,4 @@
-import { app, BrowserWindow} from 'electron'
+import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import { registerIpcHandlers } from './ipc-handlers'
 
@@ -9,70 +9,70 @@ import '../vite-env.d'
 registerIpcHandlers()
 
 if (require('electron-squirrel-startup')) {
-    app.quit()
+  app.quit()
 }
 
 const createWindow = () => {
-    const mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        webPreferences: {
-            preload: path.join(__dirname, '../preload/index.js'),
-            nodeIntegration: false,
-            contextIsolation: true,
-            sandbox: false
-        },
-        frame: false, // Кастомный фрейм
-        transparent: true, // Прозрачность для стеклянного эффекта
-        titleBarStyle: 'hidden', // Скрыть стандартную панель заголовка
-        titleBarOverlay: {
-            color: '#1a1a2e',
-            symbolColor: '#e6e6e6',
-            height: 40
-        }
-    })
+  const mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+    frame: false, // Кастомный фрейм
+    transparent: true, // Прозрачность для стеклянного эффекта
+    titleBarStyle: 'hidden', // Скрыть стандартную панель заголовка
+    titleBarOverlay: {
+      color: '#1a1a2e',
+      symbolColor: '#e6e6e6',
+      height: 40,
+    },
+  })
 
-    // Загружаем приложение
-    const loadApp = () => {
-        // @ts-ignore - Vite переменные определены во время сборки
-        if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
-            // @ts-ignore
-            mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
-        } else {
-            // @ts-ignore  
-            mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
-        }
+  // Загружаем приложение
+  const loadApp = () => {
+    // @ts-ignore - Vite переменные определены во время сборки
+    if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
+      // @ts-ignore
+      mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+    } else {
+      // @ts-ignore
+      mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
     }
+  }
 
-    loadApp()
+  loadApp()
 
-    // DevTools в режиме разработки
-    if (process.env.NODE_ENV === 'development') {
-        mainWindow.webContents.openDevTools({ mode: 'detach' })
-    }
+  // DevTools в режиме разработки
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
 
-    // УБЕРИТЕ эти строки - обработчики уже в registerIpcHandlers
-    // ipcMain.on('window-minimize', () => mainWindow.minimize())
-    // ipcMain.on('window-maximize', () => {
-    //     if (mainWindow.isMaximized()) {
-    //         mainWindow.unmaximize()
-    //     } else {
-    //         mainWindow.maximize()
-    //     }
-    // })
-    // ipcMain.on('window-close', () => mainWindow.close())
+  // УБЕРИТЕ эти строки - обработчики уже в registerIpcHandlers
+  // ipcMain.on('window-minimize', () => mainWindow.minimize())
+  // ipcMain.on('window-maximize', () => {
+  //     if (mainWindow.isMaximized()) {
+  //         mainWindow.unmaximize()
+  //     } else {
+  //         mainWindow.maximize()
+  //     }
+  // })
+  // ipcMain.on('window-close', () => mainWindow.close())
 }
 
 app.on('ready', createWindow)
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit()
-    }
+  if (process.platform !== 'darwin') {
+    app.quit()
+  }
 })
 
 app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow()
-    }
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
+  }
 })
