@@ -117,6 +117,8 @@ app.on('before-quit', () => {
 })
 
 // Предотвращение множественных экземпляров (для production)
+// Временно отключено для разработки
+/*
 const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
@@ -132,3 +134,4 @@ if (!gotTheLock) {
     }
   })
 }
+*/
