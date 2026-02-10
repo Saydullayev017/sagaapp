@@ -3,7 +3,7 @@ import path from 'path'
 import { registerIpcHandlers } from './ipc-handlers'
 
 // Импорт для типов Vite (путь относительно файла)
-import '../vite-env.d'
+import '../vite-env.d.ts'
 
 // Регистрация обработчиков IPC
 registerIpcHandlers()
@@ -34,13 +34,10 @@ const createWindow = () => {
 
   // Загружаем приложение
   const loadApp = () => {
-    // @ts-ignore - Vite переменные определены во время сборки
-    if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
-      // @ts-ignore
-      mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.loadURL('http://localhost:5173')
     } else {
-      // @ts-ignore
-      mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+      mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
     }
   }
 

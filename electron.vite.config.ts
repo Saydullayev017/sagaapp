@@ -5,11 +5,12 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'electron/main/index.ts'),
-        },
+      lib: {
+        entry: resolve(__dirname, 'electron/main/index.ts'),
       },
+    },
+    define: {
+      MAIN_WINDOW_VITE_NAME: JSON.stringify('renderer'),
     },
     resolve: {
       alias: {
@@ -19,10 +20,8 @@ export default defineConfig({
   },
   preload: {
     build: {
-      rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'electron/preload/index.ts'),
-        },
+      lib: {
+        entry: resolve(__dirname, 'electron/preload/index.ts'),
       },
     },
     resolve: {
@@ -32,11 +31,12 @@ export default defineConfig({
     },
   },
   renderer: {
+    root: resolve(__dirname, 'src'),
     build: {
+      outDir: resolve(__dirname, 'out/renderer'),
+      emptyOutDir: true,
       rollupOptions: {
-        input: {
-          index: resolve(__dirname, 'src/index.html'),
-        },
+        input: resolve(__dirname, 'src/index.html'),
       },
     },
     resolve: {
