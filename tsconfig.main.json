@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out/main",
+    "composite": true,
+    "rootDir": "electron/main"
+  },
+  "include": [
+    "electron/main/**/*",
+    "electron/vite-env.d.ts"
+  ],
+  "exclude": ["node_modules", "out", "dist"]
+}

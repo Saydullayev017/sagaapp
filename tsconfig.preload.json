@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out/preload",
+    "composite": true,
+    "rootDir": "electron/preload"
+  },
+  "include": [
+    "electron/preload/**/*",
+    "electron/vite-env.d.ts"
+  ],
+  "exclude": ["node_modules", "out", "dist"]
+}
