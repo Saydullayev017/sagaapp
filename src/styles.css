@@ -102,9 +102,65 @@ body {
   color: var(--text-secondary);
 }
 
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
 .sidebar-actions {
   display: flex;
   gap: 4px;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-item {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* File tree search */
+.file-tree-search {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.file-tree-search input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.file-tree-search input:focus {
+  border-color: var(--accent);
+}
+
+.file-tree-search input::placeholder {
+  color: var(--text-secondary);
 }
 
 .icon-button {
@@ -165,10 +221,12 @@ body {
 .tree-item-content {
   display: flex;
   align-items: center;
-  padding: 6px 16px 6px 12px;
+  padding: 5px 16px;
   cursor: pointer;
   transition: background 0.15s;
   font-size: 13px;
+  border-radius: 4px;
+  margin: 1px 4px;
 }
 
 .tree-item-content:hover {
@@ -177,12 +235,27 @@ body {
 
 .tree-item-content.active {
   background: rgba(108, 99, 255, 0.2);
-  border-left: 2px solid var(--accent);
+}
+
+.tree-toggle {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+  transition: transform 0.15s;
 }
 
 .tree-icon {
-  margin-right: 8px;
+  margin-right: 6px;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
 }
 
 .tree-label {
@@ -190,6 +263,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
 }
 
 .tree-folder .tree-label {
@@ -197,7 +271,26 @@ body {
 }
 
 .tree-children {
-  padding-left: 12px;
+  margin-left: 0;
+}
+
+/* Empty state improvements */
+.empty-state {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-text {
+  margin-bottom: 16px;
+  font-size: 14px;
 }
 
 /* Resize handles */
