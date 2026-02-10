@@ -1,16 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Japp - Markdown Editor</title>
-    <link rel="stylesheet" href="./styles.css">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-</head>
-<body>
+
+    <!-- Content Security Policy -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: blob: file:;
+        font-src 'self' data:;
+        connect-src 'self' file:;
+        media-src 'self' file:;
+        object-src 'none';
+        frame-src 'none';
+        child-src 'none';
+        worker-src 'none';
+        form-action 'none';
+        base-uri 'self';
+        manifest-src 'self';
+    "
+    />
+
+    <!-- Дополнительные заголовки безопасности -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
+
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  </head>
+  <body>
     <div id="app" class="app-container">
-        <!-- Структура будет создана через TypeScript -->
+      <!-- Структура будет создана через TypeScript -->
     </div>
     <script type="module" src="./main.ts"></script>
-</body>
+  </body>
 </html>
