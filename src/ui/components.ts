@@ -1,3 +1,24 @@
+// Types for file tree
+interface TreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  extension: string
+  size?: number
+  children?: TreeNode[]
+  isExpanded?: boolean
+}
+
+interface FileTreeState {
+  rootPath: string | null
+  nodes: TreeNode[]
+  expandedPaths: Set<string>
+  selectedPath: string | null
+  filterText: string
+  fileCount: number
+  folderCount: number
+}
+
 // State management
 interface UIState {
   currentFolder: string | null
@@ -8,6 +29,7 @@ interface UIState {
   isPreviewVisible: boolean
   line: number
   column: number
+  fileTree: FileTreeState
 }
 
 const state: UIState = {
@@ -19,6 +41,15 @@ const state: UIState = {
   isPreviewVisible: false,
   line: 1,
   column: 1,
+  fileTree: {
+    rootPath: null,
+    nodes: [],
+    expandedPaths: new Set(),
+    selectedPath: null,
+    filterText: '',
+    fileCount: 0,
+    folderCount: 0,
+  },
 }
 
 export function initializeUI(): void {
@@ -36,14 +67,24 @@ export function initializeUI(): void {
       <!-- Left Panel: Sidebar -->
       <aside class="sidebar" id="sidebar" style="width: ${state.sidebarWidth}px">
         <div class="sidebar-header">
-          <h3>Explorer</h3>
+          <div class="sidebar-title">
+            <h3>Explorer</h3>
+            <span class="file-count" id="file-count"></span>
+          </div>
           <div class="sidebar-actions">
             <button class="icon-button" id="open-folder-btn" title="Open Folder">📁</button>
             <button class="icon-button" id="refresh-files" title="Refresh">⟳</button>
+            <button class="icon-button" id="collapse-all-btn" title="Collapse All">⏬</button>
           </div>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-tree-search">
+          <input type="text" id="tree-search" placeholder="🔍 Search files..." />
         </div>
         <div class="file-tree" id="file-tree">
           <div class="empty-state">
+            <div class="empty-icon">📂</div>
+            <div class="empty-text">No folder opened</div>
             <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
           </div>
         </div>
@@ -298,51 +339,142 @@ async function loadFileTree(folderPath: string): Promise<void> {
   if (!window.electronAPI?.readDirectory) return
 
   const result = await window.electronAPI.readDirectory(folderPath)
-  if (result.success) {
-    const fileTree = document.getElementById('file-tree')
-    if (fileTree) {
-      fileTree.innerHTML = renderFileTree(result.entries, folderPath)
-      setupFileTreeListeners()
-    }
+  if (result.success && result.entries) {
+    state.fileTree.rootPath = folderPath
+    state.fileTree.nodes = result.entries.map((entry: any) => ({
+      name: entry.name,
+      path: entry.path,
+      type: entry.type,
+      extension: entry.extension,
+      size: entry.size,
+      children: undefined,
+      isExpanded: false,
+    }))
+
+    updateBreadcrumb(folderPath)
+    updateFileCount()
+    renderFileTreeUI()
   }
 }
 
-function renderFileTree(entries: any[], _basePath: string): string {
-  const filtered = entries.filter(entry => {
-    if (entry.type === 'directory') return true
-    return entry.name.endsWith('.md') || entry.name.endsWith('.markdown')
-  })
+function updateBreadcrumb(folderPath: string): void {
+  const breadcrumb = document.getElementById('breadcrumb')
+  if (!breadcrumb) return
 
-  filtered.sort((a, b) => {
+  const parts = folderPath.split(/[/\\]/).filter(Boolean)
+  const folderName = parts.pop() || folderPath
+  breadcrumb.innerHTML = `<span class="breadcrumb-item">${folderName}</span>`
+}
+
+function updateFileCount(): void {
+  const fileCountEl = document.getElementById('file-count')
+  if (!fileCountEl) return
+
+  const files = state.fileTree.nodes.filter(n => n.type === 'file').length
+  const folders = state.fileTree.nodes.filter(n => n.type === 'directory').length
+  state.fileTree.fileCount = files
+  state.fileTree.folderCount = folders
+
+  fileCountEl.textContent = `${files} files, ${folders} folders`
+}
+
+function renderFileTreeUI(): void {
+  const fileTree = document.getElementById('file-tree')
+  if (!fileTree) return
+
+  const filtered = filterNodes(state.fileTree.nodes)
+
+  if (filtered.length === 0 && state.fileTree.rootPath) {
+    fileTree.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-text">No markdown files found</div>
+      </div>
+    `
+    return
+  }
+
+  fileTree.innerHTML = renderTreeNodes(filtered, 0)
+  setupFileTreeListeners()
+}
+
+function filterNodes(nodes: TreeNode[]): TreeNode[] {
+  const filter = state.fileTree.filterText.toLowerCase()
+
+  return nodes.filter(node => {
+    // Always show directories
+    if (node.type === 'directory') return true
+    // Filter markdown files
+    if (!filter) {
+      return node.name.endsWith('.md') || node.name.endsWith('.markdown')
+    }
+    return node.name.toLowerCase().includes(filter)
+  })
+}
+
+function renderTreeNodes(nodes: TreeNode[], depth: number): string {
+  const sorted = [...nodes].sort((a, b) => {
     if (a.type === b.type) return a.name.localeCompare(b.name)
     return a.type === 'directory' ? -1 : 1
   })
 
-  return filtered
-    .map(entry => {
-      const isExpanded = state.expandedFolders.has(entry.path)
-      if (entry.type === 'directory') {
+  return sorted
+    .map(node => {
+      const isExpanded = state.fileTree.expandedPaths.has(node.path)
+      const isSelected = state.fileTree.selectedPath === node.path
+      const paddingLeft = 12 + depth * 12
+
+      if (node.type === 'directory') {
         return `
-        <div class="tree-item tree-folder">
-          <div class="tree-item-content" data-path="${entry.path}" data-type="directory">
-            <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
-            <span class="tree-label">${entry.name}</span>
+          <div class="tree-item tree-folder" style="padding-left: ${paddingLeft}px">
+            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+                 data-path="${node.path}" 
+                 data-type="directory"
+                 style="padding-left: 0">
+              <span class="tree-toggle">${isExpanded ? '▼' : '▶'}</span>
+              <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
+              <span class="tree-label">${escapeHtml(node.name)}</span>
+            </div>
+            <div class="tree-children" 
+                 id="folder-${encodePath(node.path)}" 
+                 style="display: ${isExpanded ? 'block' : 'none'}">
+            </div>
           </div>
-          <div class="tree-children" id="folder-${encodePath(entry.path)}" style="display: ${isExpanded ? 'block' : 'none'}"></div>
-        </div>
-      `
+        `
       } else {
+        const icon = getFileIcon(node.name)
         return `
-        <div class="tree-item tree-file">
-          <div class="tree-item-content" data-path="${entry.path}" data-type="file">
-            <span class="tree-icon">📝</span>
-            <span class="tree-label">${entry.name}</span>
+          <div class="tree-item tree-file" style="padding-left: ${paddingLeft}px">
+            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+                 data-path="${node.path}" 
+                 data-type="file"
+                 style="padding-left: 0">
+              <span class="tree-toggle" style="visibility: hidden">▶</span>
+              <span class="tree-icon">${icon}</span>
+              <span class="tree-label">${escapeHtml(node.name)}</span>
+            </div>
           </div>
-        </div>
-      `
+        `
       }
     })
     .join('')
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function getFileIcon(filename: string): string {
+  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return '📝'
+  if (filename.endsWith('.json')) return '📋'
+  if (filename.endsWith('.js') || filename.endsWith('.ts')) return '💻'
+  if (filename.endsWith('.css') || filename.endsWith('.scss')) return '🎨'
+  if (filename.endsWith('.html')) return '🌐'
+  if (filename.endsWith('.txt')) return '📄'
+  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return '⚙️'
+  if (filename.endsWith('.gitignore')) return '🔒'
+  return '📄'
 }
 
 function encodePath(path: string): string {
@@ -350,6 +482,7 @@ function encodePath(path: string): string {
 }
 
 function setupFileTreeListeners(): void {
+  // Tree item clicks
   document.querySelectorAll('.tree-item-content').forEach(item => {
     item.addEventListener('click', async e => {
       const target = e.currentTarget as HTMLElement
@@ -358,33 +491,62 @@ function setupFileTreeListeners(): void {
 
       if (!path) return
 
+      // Update selection
+      document.querySelectorAll('.tree-item-content').forEach(el => {
+        el.classList.remove('active')
+      })
+      target.classList.add('active')
+      state.fileTree.selectedPath = path
+
       if (type === 'directory') {
+        e.stopPropagation()
         toggleFolder(path)
       } else {
         openFileInEditor(path)
       }
     })
   })
+
+  // Search input
+  const searchInput = document.getElementById('tree-search') as HTMLInputElement
+  if (searchInput) {
+    searchInput.addEventListener(
+      'input',
+      debounce(() => {
+        state.fileTree.filterText = searchInput.value
+        renderFileTreeUI()
+      }, 150)
+    )
+  }
+
+  // Collapse all button
+  document.getElementById('collapse-all-btn')?.addEventListener('click', () => {
+    state.fileTree.expandedPaths.clear()
+    renderFileTreeUI()
+  })
 }
 
 async function toggleFolder(folderPath: string): Promise<void> {
-  const isExpanded = state.expandedFolders.has(folderPath)
+  const isExpanded = state.fileTree.expandedPaths.has(folderPath)
   const childrenContainer = document.getElementById(`folder-${encodePath(folderPath)}`)
-  const icon = document.querySelector(`[data-path="${folderPath}"] .tree-icon`)
+  const toggleIcon = document.querySelector(`[data-path="${folderPath}"] .tree-toggle`)
+  const folderIcon = document.querySelector(`[data-path="${folderPath}"] .tree-icon`)
 
   if (isExpanded) {
-    state.expandedFolders.delete(folderPath)
+    state.fileTree.expandedPaths.delete(folderPath)
     if (childrenContainer) childrenContainer.style.display = 'none'
-    if (icon) icon.textContent = '📁'
+    if (toggleIcon) toggleIcon.textContent = '▶'
+    if (folderIcon) folderIcon.textContent = '📁'
   } else {
-    state.expandedFolders.add(folderPath)
+    state.fileTree.expandedPaths.add(folderPath)
     if (childrenContainer) {
       if (!childrenContainer.innerHTML) {
         await loadFolderContents(folderPath, childrenContainer)
       }
       childrenContainer.style.display = 'block'
     }
-    if (icon) icon.textContent = '📂'
+    if (toggleIcon) toggleIcon.textContent = '▼'
+    if (folderIcon) folderIcon.textContent = '📂'
   }
 }
 
@@ -392,8 +554,15 @@ async function loadFolderContents(folderPath: string, container: HTMLElement): P
   if (!window.electronAPI?.readDirectory) return
 
   const result = await window.electronAPI.readDirectory(folderPath)
-  if (result.success) {
-    container.innerHTML = renderFileTree(result.entries, folderPath)
+  if (result.success && result.entries) {
+    const nodes: TreeNode[] = result.entries.map((entry: any) => ({
+      name: entry.name,
+      path: entry.path,
+      type: entry.type,
+      extension: entry.extension,
+      size: entry.size,
+    }))
+    container.innerHTML = renderTreeNodes(nodes, 1)
     setupFileTreeListeners()
   }
 }
@@ -415,7 +584,7 @@ async function openFileInEditor(filePath: string): Promise<void> {
   if (!window.electronAPI?.readFile) return
 
   const result = await window.electronAPI.readFile(filePath)
-  if (result.success) {
+  if (result.success && result.content !== undefined) {
     const editor = document.getElementById('editor') as HTMLTextAreaElement
     if (editor) {
       editor.value = result.content
