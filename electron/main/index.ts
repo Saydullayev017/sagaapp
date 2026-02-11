@@ -29,20 +29,28 @@ const createWindow = (): BrowserWindow => {
       experimentalFeatures: false,
       plugins: false,
     },
-    frame: false, // Кастомный фрейм
-    transparent: true, // Прозрачность для стеклянного эффекта
+    frame: false, // Кастомный фрейм (безрамочное окно)
+    transparent: false, // Прозрачность отключена (вызывала проблемы)
     titleBarStyle: 'hidden', // Скрыть стандартную панель заголовка
     titleBarOverlay: {
       color: '#1a1a2e',
       symbolColor: '#e6e6e6',
       height: 40,
     },
-    show: false, // Не показывать окно сразу
+    show: true, // Показывать окно сразу
   })
 
   // Обработчики событий загрузки
   window.webContents.once('did-finish-load', () => {
-    window.show() // Показать окно после загрузки
+    console.log('Window finished loading')
+    window.focus()
+    window.moveTop()
+  })
+
+  // Show window immediately and ensure it's visible
+  window.once('ready-to-show', () => {
+    window.show()
+    window.focus()
   })
 
   window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {

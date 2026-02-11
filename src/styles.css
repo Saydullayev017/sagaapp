@@ -20,56 +20,40 @@
   --resize-handle-width: 4px;
 }
 
+html,
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: transparent;
+  background: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
   height: 100vh;
+  width: 100vw;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Window controls */
-.window-controls {
+#app {
+  height: 100vh;
+  width: 100vw;
   display: flex;
-  justify-content: flex-end;
-  padding: 8px 12px;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+/* Titlebar drag area (for frameless window) */
+.titlebar-drag-area {
+  height: 40px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
   -webkit-app-region: drag;
-}
-
-.window-control {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  margin-left: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-  -webkit-app-region: no-drag;
-}
-
-.window-control:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.window-control.close:hover {
-  background: var(--error);
+  flex-shrink: 0;
 }
 
 /* Main layout - 3 panels: sidebar, content, status-bar */
 .main-layout {
   display: flex;
   flex-direction: row;
-  height: calc(100vh - 49px - 36px);
+  height: calc(100vh - 40px - 36px);
   background: var(--bg-primary);
   overflow: hidden;
 }
@@ -381,6 +365,21 @@ body {
   min-width: 200px;
   display: flex;
   flex-direction: column;
+}
+
+/* CodeMirror container */
+.codemirror-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.codemirror-container .cm-editor {
+  height: 100%;
+  width: 100%;
+}
+
+.codemirror-container .cm-scroller {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', monospace;
 }
 
 .preview-pane {
