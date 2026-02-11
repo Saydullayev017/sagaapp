@@ -295,17 +295,6 @@ body {
   cursor: col-resize;
 }
 
-.resize-handle-split {
-  width: var(--resize-handle-width);
-  cursor: col-resize;
-  background: var(--border-color);
-}
-
-.resize-handle-split:hover,
-.resize-handle-split.resizing {
-  background: var(--accent);
-}
-
 /* Editor container */
 .editor-container {
   flex: 1;
@@ -354,19 +343,6 @@ body {
   transform: translateY(1px);
 }
 
-/* Split container */
-.split-container {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-.editor-pane {
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-}
-
 /* CodeMirror container */
 .codemirror-container {
   flex: 1;
@@ -380,6 +356,15 @@ body {
 
 .codemirror-container .cm-scroller {
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', monospace;
+}
+
+/* Full editor container (no preview) */
+.editor-container-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-primary);
 }
 
 .preview-pane {
@@ -518,6 +503,48 @@ body {
 
 .preview-content li {
   margin-bottom: 4px;
+}
+
+.preview-content hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 24px 0;
+}
+
+.preview-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.preview-content th,
+.preview-content td {
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.preview-content th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+}
+
+.preview-content tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.preview-content input[type='checkbox'] {
+  margin-right: 8px;
+  accent-color: var(--accent);
+}
+
+.preview-content .local-image {
+  border: 2px dashed var(--border-color);
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  display: block;
+  text-align: center;
+  color: var(--text-secondary);
 }
 
 /* Status bar - bottom panel */
