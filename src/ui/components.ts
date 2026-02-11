@@ -5,6 +5,7 @@ import {
   setEditorContent,
   getCursorPosition,
 } from '../editor/codemirror'
+import { parseMarkdown } from '../editor/markdown-parser'
 
 // Types for file tree
 interface TreeNode {
@@ -108,10 +109,22 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="format-btn">✨ Format</button>
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
           </div>
+          <div class="toolbar-right">
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+            </div>
+          </div>
         </div>
         
-        <div class="editor-container-full" id="editor-container-full">
-          <div class="codemirror-container" id="codemirror-editor"></div>
+        <div class="editor-content-wrapper" id="editor-content-wrapper">
+          <div class="editor-pane" id="editor-pane">
+            <div class="codemirror-container" id="codemirror-editor"></div>
+          </div>
+          
+          <div class="preview-pane hidden" id="preview-pane">
+            <div class="preview-content" id="preview-content"></div>
+          </div>
         </div>
       </main>
     </div>
@@ -168,6 +181,53 @@ function setupEventListeners(): void {
     console.log('Format clicked')
     formatMarkdown()
   })
+
+  // Переключение режимов отображения (Edit / Preview)
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const mode = target.dataset.mode
+
+      if (mode) {
+        toggleEditorMode(mode)
+
+        // Обновляем активное состояние кнопок
+        document.querySelectorAll('.view-mode-btn').forEach(b => {
+          b.classList.remove('active')
+        })
+        target.classList.add('active')
+
+        showNotification(`Switched to ${mode} mode`, 'info')
+      }
+    })
+  })
+}
+
+// Переключение между режимами Edit и Preview
+function toggleEditorMode(mode: string): void {
+  const editorPane = document.getElementById('editor-pane')
+  const previewPane = document.getElementById('preview-pane')
+
+  if (!editorPane || !previewPane) return
+
+  if (mode === 'edit') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.add('hidden')
+  } else if (mode === 'preview') {
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+  }
+}
+
+// Обновление preview
+async function updatePreview(): Promise<void> {
+  const previewContent = document.getElementById('preview-content')
+  if (!cmEditor || !previewContent) return
+
+  const content = getEditorContent(cmEditor)
+  const html = await parseMarkdown(content)
+  previewContent.innerHTML = html
 }
 
 function setupResizeHandles(): void {
