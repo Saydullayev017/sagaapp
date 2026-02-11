@@ -68,11 +68,7 @@ export function initializeUI(): void {
   if (!app) return
 
   app.innerHTML = `
-    <div class="window-controls">
-      <button class="window-control minimize" data-action="minimize">−</button>
-      <button class="window-control maximize" data-action="maximize">□</button>
-      <button class="window-control close" data-action="close">×</button>
-    </div>
+    <div class="titlebar-drag-area"></div>
     
     <div class="main-layout">
       <!-- Left Panel: Sidebar -->
@@ -160,14 +156,6 @@ export function initializeUI(): void {
 }
 
 function setupEventListeners(): void {
-  // Обработчики оконных кнопок
-  document.querySelectorAll('.window-control').forEach(button => {
-    button.addEventListener('click', e => {
-      const action = (e.target as HTMLElement).dataset.action
-      handleWindowControl(action)
-    })
-  })
-
   // Кнопка сохранения
   document.getElementById('save-btn')?.addEventListener('click', () => {
     console.log('Save clicked')
@@ -732,20 +720,4 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
       notification.remove()
     }, 300)
   }, 3000)
-}
-
-function handleWindowControl(action: string | undefined): void {
-  if (!action || !window.electronAPI) return
-
-  switch (action) {
-    case 'minimize':
-      window.electronAPI.minimizeWindow?.()
-      break
-    case 'maximize':
-      window.electronAPI.toggleMaximize?.()
-      break
-    case 'close':
-      window.electronAPI.closeWindow?.()
-      break
-  }
 }
