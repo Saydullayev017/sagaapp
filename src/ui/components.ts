@@ -1,3 +1,11 @@
+import { EditorView } from '@codemirror/view'
+import {
+  createCodeMirrorEditor,
+  getEditorContent,
+  setEditorContent,
+  getCursorPosition,
+} from '../editor/codemirror'
+
 // Types for file tree
 interface TreeNode {
   name: string
@@ -51,6 +59,9 @@ const state: UIState = {
     folderCount: 0,
   },
 }
+
+// CodeMirror editor instance
+let cmEditor: EditorView | null = null
 
 export function initializeUI(): void {
   const app = document.getElementById('app')
@@ -108,7 +119,7 @@ export function initializeUI(): void {
         
         <div class="split-container" id="split-container">
           <div class="editor-pane" id="editor-pane" style="width: ${state.editorWidth}%">
-            <textarea class="markdown-editor" id="editor" placeholder="# Start writing markdown here...&#10;&#10;Press Enter on a markdown line to see preview"></textarea>
+            <div class="codemirror-container" id="codemirror-editor"></div>
           </div>
           
           <!-- Resize Handle for Editor/Preview -->
@@ -145,7 +156,7 @@ export function initializeUI(): void {
   // Добавляем обработчики событий
   setupEventListeners()
   setupResizeHandles()
-  setupEditorListeners()
+  setupCodeMirrorEditor()
 }
 
 function setupEventListeners(): void {
@@ -269,42 +280,30 @@ function setupResizeHandles(): void {
   }
 }
 
-function setupEditorListeners(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+function setupCodeMirrorEditor(): void {
+  const container = document.getElementById('codemirror-editor')
+  if (!container) return
 
-  // Track cursor position
-  editor.addEventListener('keyup', updateCursorPosition)
-  editor.addEventListener('click', updateCursorPosition)
+  // Create CodeMirror editor
+  cmEditor = createCodeMirrorEditor(
+    container,
+    '',
+    debounce(() => {
+      updatePreview()
+      updateCursorPosition()
+    }, 300)
+  )
 
-  // Auto-preview on Enter
-  editor.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      // Show preview when pressing Enter
-      const preview = document.getElementById('preview')
-      if (preview && preview.classList.contains('hidden')) {
-        preview.classList.remove('hidden')
-        state.isPreviewVisible = true
-      }
-      // Update preview after a short delay to get new content
-      setTimeout(updatePreview, 50)
-    }
-  })
-
-  // Update preview on input
-  editor.addEventListener('input', debounce(updatePreview, 300))
+  // Auto-preview on initial load
+  updatePreview()
 }
 
 function updateCursorPosition(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  const cursorPosition = editor.selectionStart
-  const textBeforeCursor = editor.value.substring(0, cursorPosition)
-  const lines = textBeforeCursor.split('\n')
-
-  state.line = lines.length
-  state.column = lines[lines.length - 1].length + 1
+  const pos = getCursorPosition(cmEditor)
+  state.line = pos.line
+  state.column = pos.column
 
   const statusLine = document.getElementById('status-line')
   if (statusLine) {
@@ -585,9 +584,8 @@ async function openFileInEditor(filePath: string): Promise<void> {
 
   const result = await window.electronAPI.readFile(filePath)
   if (result.success && result.content !== undefined) {
-    const editor = document.getElementById('editor') as HTMLTextAreaElement
-    if (editor) {
-      editor.value = result.content
+    if (cmEditor) {
+      setEditorContent(cmEditor, result.content)
       state.currentFile = filePath
 
       // Update status
@@ -619,10 +617,10 @@ async function saveCurrentFile(): Promise<void> {
     return
   }
 
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  const result = await window.electronAPI.writeFile(state.currentFile, editor.value)
+  const content = getEditorContent(cmEditor)
+  const result = await window.electronAPI.writeFile(state.currentFile, content)
   if (result.success) {
     showNotification('File saved successfully', 'success')
     updateGitStatus(state.currentFolder || '')
@@ -639,10 +637,10 @@ async function saveAsNewFile(): Promise<void> {
   })
 
   if (!result.canceled && result.filePath) {
-    const editor = document.getElementById('editor') as HTMLTextAreaElement
-    if (!editor) return
+    if (!cmEditor) return
 
-    const writeResult = await window.electronAPI.writeFile(result.filePath, editor.value)
+    const content = getEditorContent(cmEditor)
+    const writeResult = await window.electronAPI.writeFile(result.filePath, content)
     if (writeResult.success) {
       state.currentFile = result.filePath
       const statusFile = document.getElementById('status-file')
@@ -657,11 +655,10 @@ async function saveAsNewFile(): Promise<void> {
 }
 
 function updatePreview(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
   const previewContent = document.getElementById('preview-content')
-  if (!editor || !previewContent) return
+  if (!cmEditor || !previewContent) return
 
-  const content = editor.value
+  const content = getEditorContent(cmEditor)
   // Simple markdown to HTML conversion (basic)
   const html = simpleMarkdownToHtml(content)
   previewContent.innerHTML = html
@@ -696,16 +693,15 @@ function simpleMarkdownToHtml(markdown: string): string {
 }
 
 function formatMarkdown(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  let content = editor.value
+  let content = getEditorContent(cmEditor)
   // Add spaces after headers
   content = content.replace(/^(#{1,6})([^ #])/gim, '$1 $2')
   // Ensure blank line before headers
   content = content.replace(/([^\n])\n(#{1,6})/gim, '$1\n\n$2')
 
-  editor.value = content
+  setEditorContent(cmEditor, content)
   showNotification('Markdown formatted', 'success')
 }
 

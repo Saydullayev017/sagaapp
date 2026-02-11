@@ -383,6 +383,21 @@ body {
   flex-direction: column;
 }
 
+/* CodeMirror container */
+.codemirror-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.codemirror-container .cm-editor {
+  height: 100%;
+  width: 100%;
+}
+
+.codemirror-container .cm-scroller {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Fira Code', monospace;
+}
+
 .preview-pane {
   flex: 1;
   min-width: 200px;

@@ -3,23 +3,6 @@
 import { initializeUI } from './ui/components'
 import './styles.css'
 
-// Объявляем global интерфейс для electronAPI
-declare global {
-  interface Window {
-    electronAPI: {
-      minimizeWindow?: () => void
-      toggleMaximize?: () => void
-      closeWindow?: () => void
-      readFile?: (path: string) => Promise<any>
-      writeFile?: (path: string, content: string) => Promise<any>
-      readDirectory?: (path: string) => Promise<any>
-      showOpenDialog?: (options: any) => Promise<any>
-      showSaveDialog?: (options: any) => Promise<any>
-      getAppVersion?: () => Promise<string>
-    }
-  }
-}
-
 // Инициализация приложения после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Japp Markdown Editor starting...')
