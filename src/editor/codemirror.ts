@@ -5,7 +5,6 @@ import {
   ViewUpdate,
   Decoration,
   DecorationSet,
-  placeholder,
 } from '@codemirror/view'
 import { EditorState, StateEffect, StateField } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
@@ -156,6 +155,11 @@ const customTheme = EditorView.theme(
       borderLeftColor: 'var(--accent)',
       borderLeftWidth: '2px',
     },
+    '.cm-cursor-primary': {
+      height: '1.2em !important',
+      minHeight: '1.2em !important',
+      maxHeight: '1.2em !important',
+    },
     '.cm-selectionBackground': {
       backgroundColor: 'rgba(108, 99, 255, 0.3)',
     },
@@ -275,7 +279,7 @@ export function createCodeMirrorEditor(
 
   const view = new EditorView({
     state: EditorState.create({
-      doc: initialContent,
+      doc: initialContent || '\n', // Start with empty line to fix cursor size
       extensions: [
         // Basic setup
         history(),
@@ -299,8 +303,7 @@ export function createCodeMirrorEditor(
         // Line wrapping
         EditorView.lineWrapping,
 
-        // Placeholder
-        placeholder('# Start writing markdown here...\n\nPress Enter to hide markdown syntax'),
+        // No placeholder to avoid large cursor issue
       ],
     }),
     parent,
