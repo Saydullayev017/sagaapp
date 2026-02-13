@@ -202,6 +202,19 @@ function setupEventListeners(): void {
   document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
   document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
 
+  // View mode toggle (Edit/Preview)
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const mode = target.dataset.mode
+      if (mode) {
+        toggleEditorMode(mode)
+        document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.remove('active'))
+        target.classList.add('active')
+      }
+    })
+  })
+
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -447,6 +460,30 @@ function updateCursorPosition(): void {
   if (statusLine) {
     statusLine.textContent = `Ln ${state.line}, Col ${state.column}`
   }
+}
+
+function toggleEditorMode(mode: string): void {
+  const editorPane = document.getElementById('editor-pane')
+  const previewPane = document.getElementById('preview-pane')
+  if (!editorPane || !previewPane) return
+
+  if (mode === 'edit') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.add('hidden')
+  } else if (mode === 'preview') {
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+  }
+}
+
+async function updatePreview(): Promise<void> {
+  const previewContent = document.getElementById('preview-content')
+  if (!cmEditor || !previewContent) return
+
+  const content = getEditorContent(cmEditor)
+  const html = await parseMarkdown(content)
+  previewContent.innerHTML = html
 }
 
 function debounce(func: Function, wait: number): (...args: any[]) => void {
