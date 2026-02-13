@@ -820,3 +820,63 @@ body {
 ::selection {
   background: rgba(108, 99, 255, 0.3);
 }
+
+/* Search Panel */
+.search-panel {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.search-panel input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.search-panel input:focus {
+  border-color: var(--accent);
+}
+
+.search-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.search-action-btn {
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.search-action-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.search-results {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.search-panel.hidden {
+  display: none;
+}
