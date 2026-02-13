@@ -219,16 +219,26 @@ function setupEventListeners(): void {
   window.addEventListener('keydown', e => {
     const isMod = e.ctrlKey || e.metaKey
 
-    // Ctrl/Cmd+F: Search
-    if (isMod && e.key === 'f') {
-      e.preventDefault()
-      toggleSearchPanel()
-    }
-
-    // Ctrl/Cmd+B: Toggle sidebar
+    // Ctrl/Cmd+B: Toggle sidebar (file tree)
     if (isMod && e.key === 'b') {
       e.preventDefault()
       toggleSidebar()
+    }
+
+    // Ctrl/Cmd+F: Focus on file search in sidebar
+    if (isMod && e.key === 'f') {
+      e.preventDefault()
+      const sidebar = document.getElementById('sidebar')
+      if (sidebar && !sidebar.classList.contains('hidden')) {
+        const searchInput = document.getElementById('tree-search') as HTMLInputElement
+        searchInput?.focus()
+      } else {
+        toggleSidebar()
+        setTimeout(() => {
+          const searchInput = document.getElementById('tree-search') as HTMLInputElement
+          searchInput?.focus()
+        }, 100)
+      }
     }
 
     // Ctrl/Cmd+P: Toggle preview
