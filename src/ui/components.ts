@@ -217,9 +217,30 @@ function setupEventListeners(): void {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    const isMod = e.ctrlKey || e.metaKey
+
+    // Ctrl+F: Search
+    if (isMod && e.key === 'f') {
       e.preventDefault()
       toggleSearchPanel()
+    }
+
+    // Ctrl+B: Toggle sidebar
+    if (isMod && e.key === 'b') {
+      e.preventDefault()
+      toggleSidebar()
+    }
+
+    // Ctrl+P: Toggle preview
+    if (isMod && e.key === 'p') {
+      e.preventDefault()
+      togglePreview()
+    }
+
+    // Ctrl+S: Save
+    if (isMod && e.key === 's') {
+      e.preventDefault()
+      saveCurrentFile()
     }
   })
 
@@ -484,6 +505,41 @@ async function updatePreview(): Promise<void> {
   const content = getEditorContent(cmEditor)
   const html = await parseMarkdown(content)
   previewContent.innerHTML = html
+}
+
+function toggleSidebar(): void {
+  const sidebar = document.getElementById('sidebar')
+  if (!sidebar) return
+
+  if (sidebar.classList.contains('hidden')) {
+    sidebar.classList.remove('hidden')
+  } else {
+    sidebar.classList.add('hidden')
+  }
+}
+
+function togglePreview(): void {
+  const previewPane = document.getElementById('preview-pane')
+  const editorPane = document.getElementById('editor-pane')
+  const previewBtn = document.querySelector('.view-mode-btn[data-mode="preview"]')
+  const editBtn = document.querySelector('.view-mode-btn[data-mode="edit"]')
+
+  if (!previewPane || !editorPane) return
+
+  if (previewPane.classList.contains('hidden')) {
+    // Switch to preview
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+    previewBtn?.classList.add('active')
+    editBtn?.classList.remove('active')
+  } else {
+    // Switch to edit
+    previewPane.classList.add('hidden')
+    editorPane.classList.remove('hidden')
+    previewBtn?.classList.remove('active')
+    editBtn?.classList.add('active')
+  }
 }
 
 function debounce(func: Function, wait: number): (...args: any[]) => void {
