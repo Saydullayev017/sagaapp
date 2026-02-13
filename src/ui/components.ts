@@ -80,18 +80,17 @@ export function initializeUI(): void {
             <span class="file-count" id="file-count"></span>
           </div>
           <div class="sidebar-actions">
-            <button class="icon-button" id="open-folder-btn" title="Open Folder">📁</button>
-            <button class="icon-button" id="refresh-files" title="Refresh">⟳</button>
-            <button class="icon-button" id="collapse-all-btn" title="Collapse All">⏬</button>
+            <button class="icon-button" id="open-folder-btn" title="Open Folder">Open</button>
+            <button class="icon-button" id="refresh-files" title="Refresh">Refresh</button>
+            <button class="icon-button" id="collapse-all-btn" title="Collapse All">Collapse</button>
           </div>
         </div>
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="file-tree-search">
-          <input type="text" id="tree-search" placeholder="🔍 Search files..." />
+          <input type="text" id="tree-search" placeholder="Search files..." />
         </div>
         <div class="file-tree" id="file-tree">
           <div class="empty-state">
-            <div class="empty-icon">📂</div>
             <div class="empty-text">No folder opened</div>
             <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
           </div>
@@ -105,23 +104,31 @@ export function initializeUI(): void {
       <main class="editor-container">
         <div class="editor-toolbar">
           <div class="toolbar-left">
-            <button class="toolbar-btn" id="save-btn">💾 Save</button>
-            <button class="toolbar-btn" id="format-btn">✨ Format</button>
-            <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
-            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">🔍 Search</button>
+            <button class="toolbar-btn" id="save-btn">Save</button>
+            <button class="toolbar-btn" id="format-btn">Format</button>
+            <button class="toolbar-btn" id="open-file-btn">Open</button>
+            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">Search</button>
+            <button class="toolbar-btn" id="new-file-btn" title="New File">New File</button>
+            <button class="toolbar-btn" id="new-folder-btn" title="New Folder">New Folder</button>
           </div>
+          <div class="toolbar-center">
+            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">Commit</button>
+            <button class="toolbar-btn git-btn" id="git-push" title="Push">Push</button>
+            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
+          </div>
+          <div class="toolbar-right">
+            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">Theme</button>
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
+            </div>
+          </div>
+        </div>
           <div class="toolbar-center">
             <button class="toolbar-btn git-btn" id="git-commit" title="Commit">✓ Commit</button>
             <button class="toolbar-btn git-btn" id="git-push" title="Push">↑ Push</button>
             <button class="toolbar-btn git-btn" id="git-pull" title="Pull">↓ Pull</button>
           </div>
-          <div class="toolbar-right">
-            <div class="view-mode-toggle">
-              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
-              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
-            </div>
-          </div>
-        </div>
           <div class="toolbar-right">
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
@@ -188,6 +195,10 @@ function setupEventListeners(): void {
 
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
+
+  // Новый файл/папка
+  document.getElementById('new-file-btn')?.addEventListener('click', createNewFile)
+  document.getElementById('new-folder-btn')?.addEventListener('click', createNewFolder)
 
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
@@ -539,13 +550,12 @@ function filterNodes(nodes: TreeNode[]): TreeNode[] {
   const filter = state.fileTree.filterText.toLowerCase()
 
   return nodes.filter(node => {
-    // Always show directories
-    if (node.type === 'directory') return true
-    // Filter markdown files
-    if (!filter) {
-      return node.name.endsWith('.md') || node.name.endsWith('.markdown')
+    // If there's a filter, search by name
+    if (filter) {
+      return node.name.toLowerCase().includes(filter)
     }
-    return node.name.toLowerCase().includes(filter)
+    // Show all files and directories
+    return true
   })
 }
 
@@ -559,7 +569,7 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
     .map(node => {
       const isExpanded = state.fileTree.expandedPaths.has(node.path)
       const isSelected = state.fileTree.selectedPath === node.path
-      const paddingLeft = 12 + depth * 12
+      const paddingLeft = 12 + depth * 16
 
       if (node.type === 'directory') {
         return `
@@ -568,8 +578,9 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
                  data-path="${node.path}" 
                  data-type="directory"
                  style="padding-left: 0">
-              <span class="tree-toggle">${isExpanded ? '▼' : '▶'}</span>
-              <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
+              <span class="tree-line"></span>
+              <span class="tree-toggle">${isExpanded ? '-' : '+'}</span>
+              <span class="tree-icon">${isExpanded ? '[+]' : '[·]'}</span>
               <span class="tree-label">${escapeHtml(node.name)}</span>
             </div>
             <div class="tree-children" 
@@ -579,15 +590,15 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
           </div>
         `
       } else {
-        const icon = getFileIcon(node.name)
         return `
           <div class="tree-item tree-file" style="padding-left: ${paddingLeft}px">
             <div class="tree-item-content ${isSelected ? 'active' : ''}" 
                  data-path="${node.path}" 
                  data-type="file"
                  style="padding-left: 0">
-              <span class="tree-toggle" style="visibility: hidden">▶</span>
-              <span class="tree-icon">${icon}</span>
+              <span class="tree-line"></span>
+              <span class="tree-toggle" style="visibility: hidden">+</span>
+              <span class="tree-icon">·</span>
               <span class="tree-label">${escapeHtml(node.name)}</span>
             </div>
           </div>
@@ -601,18 +612,6 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
-}
-
-function getFileIcon(filename: string): string {
-  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return '📝'
-  if (filename.endsWith('.json')) return '📋'
-  if (filename.endsWith('.js') || filename.endsWith('.ts')) return '💻'
-  if (filename.endsWith('.css') || filename.endsWith('.scss')) return '🎨'
-  if (filename.endsWith('.html')) return '🌐'
-  if (filename.endsWith('.txt')) return '📄'
-  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return '⚙️'
-  if (filename.endsWith('.gitignore')) return '🔒'
-  return '📄'
 }
 
 function encodePath(path: string): string {
@@ -702,6 +701,42 @@ async function loadFolderContents(folderPath: string, container: HTMLElement): P
     }))
     container.innerHTML = renderTreeNodes(nodes, 1)
     setupFileTreeListeners()
+  }
+}
+
+async function createNewFile(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const fileName = prompt('Enter file name:', 'untitled.md')
+  if (!fileName) return
+
+  const result = await window.electronAPI?.createFile(state.currentFolder, fileName)
+  if (result?.success) {
+    showNotification('File created', 'success')
+    loadFileTree(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Failed to create file', 'error')
+  }
+}
+
+async function createNewFolder(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const folderName = prompt('Enter folder name:', 'new-folder')
+  if (!folderName) return
+
+  const result = await window.electronAPI?.createFolder(state.currentFolder, folderName)
+  if (result?.success) {
+    showNotification('Folder created', 'success')
+    loadFileTree(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Failed to create folder', 'error')
   }
 }
 

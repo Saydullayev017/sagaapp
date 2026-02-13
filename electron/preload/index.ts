@@ -58,6 +58,17 @@ export interface ElectronAPI {
   gitBranch: (cwd: string) => Promise<{ success: boolean; branch?: string; error?: string }>
   gitPush: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
   gitPull: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
+
+  // File/Folder operations
+  createFile: (
+    dirPath: string,
+    fileName: string
+  ) => Promise<{ success: boolean; path?: string; error?: string }>
+  createFolder: (
+    dirPath: string,
+    folderName: string
+  ) => Promise<{ success: boolean; path?: string; error?: string }>
+  deleteItem: (itemPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // Безопасный API через contextBridge
@@ -126,6 +137,13 @@ const electronAPI: ElectronAPI = {
   gitBranch: (cwd: string) => ipcRenderer.invoke('git-branch', cwd),
   gitPush: (cwd: string) => ipcRenderer.invoke('git-push', cwd),
   gitPull: (cwd: string) => ipcRenderer.invoke('git-pull', cwd),
+
+  // File/Folder operations
+  createFile: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('create-file', dirPath, fileName),
+  createFolder: (dirPath: string, folderName: string) =>
+    ipcRenderer.invoke('create-folder', dirPath, folderName),
+  deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

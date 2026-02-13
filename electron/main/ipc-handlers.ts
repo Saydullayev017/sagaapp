@@ -244,6 +244,41 @@ export const registerIpcHandlers = () => {
       return { success: false, error: error.message }
     }
   })
+
+  // File/Folder creation
+  ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
+    try {
+      const filePath = path.join(dirPath, fileName)
+      await fs.writeFile(filePath, '', 'utf-8')
+      return { success: true, path: filePath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('create-folder', async (_event, dirPath: string, folderName: string) => {
+    try {
+      const folderPath = path.join(dirPath, folderName)
+      await fs.mkdir(folderPath, { recursive: true })
+      return { success: true, path: folderPath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('delete-item', async (_event, itemPath: string) => {
+    try {
+      const stats = await fs.stat(itemPath)
+      if (stats.isDirectory()) {
+        await fs.rm(itemPath, { recursive: true })
+      } else {
+        await fs.unlink(itemPath)
+      }
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 // Регистрация событий окна
