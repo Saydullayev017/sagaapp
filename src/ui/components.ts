@@ -215,29 +215,29 @@ function setupEventListeners(): void {
     })
   })
 
-  // Keyboard shortcuts
-  document.addEventListener('keydown', e => {
+  // Keyboard shortcuts - use window for better capture
+  window.addEventListener('keydown', e => {
     const isMod = e.ctrlKey || e.metaKey
 
-    // Ctrl+F: Search
+    // Ctrl/Cmd+F: Search
     if (isMod && e.key === 'f') {
       e.preventDefault()
       toggleSearchPanel()
     }
 
-    // Ctrl+B: Toggle sidebar
+    // Ctrl/Cmd+B: Toggle sidebar
     if (isMod && e.key === 'b') {
       e.preventDefault()
       toggleSidebar()
     }
 
-    // Ctrl+P: Toggle preview
+    // Ctrl/Cmd+P: Toggle preview
     if (isMod && e.key === 'p') {
       e.preventDefault()
       togglePreview()
     }
 
-    // Ctrl+S: Save
+    // Ctrl/Cmd+S: Save
     if (isMod && e.key === 's') {
       e.preventDefault()
       saveCurrentFile()
