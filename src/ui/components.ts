@@ -68,6 +68,9 @@ export function initializeUI(): void {
   const app = document.getElementById('app')
   if (!app) return
 
+  // Initialize theme
+  initializeTheme()
+
   app.innerHTML = `
     <div class="titlebar-drag-area"></div>
     
@@ -110,6 +113,7 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
           </div>
           <div class="toolbar-right">
+            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">🌙</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
@@ -154,6 +158,27 @@ export function initializeUI(): void {
   setupCodeMirrorEditor()
 }
 
+function initializeTheme(): void {
+  const savedTheme = localStorage.getItem('theme') || 'dark'
+  document.documentElement.setAttribute('data-theme', savedTheme)
+  updateThemeButton(savedTheme)
+}
+
+function toggleTheme(): void {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', newTheme)
+  localStorage.setItem('theme', newTheme)
+  updateThemeButton(newTheme)
+}
+
+function updateThemeButton(theme: string): void {
+  const btn = document.getElementById('theme-toggle')
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '🌙' : '☀️'
+  }
+}
+
 function setupEventListeners(): void {
   // Кнопка сохранения
   document.getElementById('save-btn')?.addEventListener('click', () => {
@@ -175,6 +200,9 @@ function setupEventListeners(): void {
 
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
+
+  // Переключение темы
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme)
 
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
