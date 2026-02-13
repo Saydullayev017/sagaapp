@@ -64,6 +64,13 @@ const state: UIState = {
 // CodeMirror editor instance
 let cmEditor: EditorView | null = null
 
+// Auto-save timeout
+let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null
+const AUTO_SAVE_DELAY = 2000
+
+// Storage keys
+const STORAGE_KEY = 'japp-state'
+
 export function initializeUI(): void {
   const app = document.getElementById('app')
   if (!app) return
@@ -143,12 +150,18 @@ export function initializeUI(): void {
   setupResizeHandles()
   setupCodeMirrorEditor()
 
-  // Открываем папку Japp по умолчанию
-  setTimeout(() => {
-    const defaultPath = '/Volumes/DEV/Japp'
-    state.currentFolder = defaultPath
-    loadFileTree(defaultPath)
-    updateGitStatus(defaultPath)
+  // Восстанавливаем состояние или открываем дефолтную папку
+  setTimeout(async () => {
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      await restoreState()
+    } else {
+      const defaultPath = '/Volumes/DEV/Japp'
+      state.currentFolder = defaultPath
+      await loadFileTree(defaultPath)
+      updateGitStatus(defaultPath)
+      saveState()
+    }
   }, 100)
 }
 
@@ -303,6 +316,7 @@ function setupResizeHandles(): void {
         isResizing = false
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
+        saveState()
       }
     })
   }
@@ -312,13 +326,13 @@ function setupCodeMirrorEditor(): void {
   const container = document.getElementById('codemirror-editor')
   if (!container) return
 
-  // Create CodeMirror editor
   cmEditor = createCodeMirrorEditor(
     container,
     '',
     debounce(() => {
       updateCursorPosition()
-    }, 300)
+      scheduleAutoSave()
+    }, 500)
   )
 }
 
@@ -402,21 +416,6 @@ function debounce(func: Function, wait: number): (...args: any[]) => void {
   }
 }
 
-async function openFolder(): Promise<void> {
-  if (!window.electronAPI?.showOpenDialog) return
-
-  const result = await window.electronAPI.showOpenDialog({
-    properties: ['openDirectory'],
-  })
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    const folderPath = result.filePaths[0]
-    state.currentFolder = folderPath
-    loadFileTree(folderPath)
-    updateGitStatus(folderPath)
-  }
-}
-
 async function loadFileTree(folderPath: string): Promise<void> {
   if (!window.electronAPI?.readDirectory) return
 
@@ -436,6 +435,7 @@ async function loadFileTree(folderPath: string): Promise<void> {
     updateBreadcrumb(folderPath)
     updateFileCount()
     renderFileTreeUI()
+    saveState()
   }
 }
 
@@ -708,6 +708,8 @@ async function openFileInEditor(filePath: string): Promise<void> {
       if (activeItem) {
         activeItem.classList.add('active')
       }
+
+      saveState()
     }
   }
 }
@@ -753,6 +755,76 @@ async function saveAsNewFile(): Promise<void> {
       }
       showNotification('File saved successfully', 'success')
     }
+  }
+}
+
+function scheduleAutoSave(): void {
+  if (autoSaveTimeout) {
+    clearTimeout(autoSaveTimeout)
+  }
+  autoSaveTimeout = setTimeout(() => {
+    if (state.currentFile && cmEditor) {
+      saveCurrentFile()
+    }
+  }, AUTO_SAVE_DELAY)
+}
+
+function saveState(): void {
+  try {
+    const stateToSave = {
+      currentFolder: state.currentFolder,
+      currentFile: state.currentFile,
+      sidebarWidth: state.sidebarWidth,
+      editorWidth: state.editorWidth,
+      expandedPaths: Array.from(state.fileTree.expandedPaths),
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave))
+  } catch (e) {
+    console.error('Failed to save state:', e)
+  }
+}
+
+function loadState(): void {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return
+
+    const stateToLoad = JSON.parse(saved)
+    if (stateToLoad.currentFolder) {
+      state.currentFolder = stateToLoad.currentFolder
+    }
+    if (stateToLoad.currentFile) {
+      state.currentFile = stateToLoad.currentFile
+    }
+    if (stateToLoad.sidebarWidth) {
+      state.sidebarWidth = stateToLoad.sidebarWidth
+    }
+    if (stateToLoad.editorWidth) {
+      state.editorWidth = stateToLoad.editorWidth
+    }
+    if (stateToLoad.expandedPaths) {
+      state.fileTree.expandedPaths = new Set(stateToLoad.expandedPaths)
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e)
+  }
+}
+
+async function restoreState(): Promise<void> {
+  loadState()
+
+  if (state.currentFolder) {
+    await loadFileTree(state.currentFolder)
+    updateGitStatus(state.currentFolder)
+  }
+
+  if (state.currentFile) {
+    await openFileInEditor(state.currentFile)
+  }
+
+  const sidebar = document.getElementById('sidebar')
+  if (sidebar && state.sidebarWidth) {
+    sidebar.style.width = `${state.sidebarWidth}px`
   }
 }
 
