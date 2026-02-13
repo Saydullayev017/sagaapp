@@ -79,21 +79,6 @@ export function initializeUI(): void {
             <h3>Explorer</h3>
             <span class="file-count" id="file-count"></span>
           </div>
-          <div class="sidebar-actions">
-            <button class="icon-button" id="open-folder-btn" title="Open Folder">Open</button>
-            <button class="icon-button" id="refresh-files" title="Refresh">Refresh</button>
-            <button class="icon-button" id="collapse-all-btn" title="Collapse All">Collapse</button>
-          </div>
-        </div>
-        <div class="breadcrumb" id="breadcrumb"></div>
-        <div class="file-tree-search">
-          <input type="text" id="tree-search" placeholder="Search files..." />
-        </div>
-        <div class="file-tree" id="file-tree">
-          <div class="empty-state">
-            <div class="empty-text">No folder opened</div>
-            <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
-          </div>
         </div>
       </aside>
       
@@ -104,10 +89,8 @@ export function initializeUI(): void {
       <main class="editor-container">
         <div class="editor-toolbar">
           <div class="toolbar-left">
-            <button class="toolbar-btn" id="save-btn">Save</button>
             <button class="toolbar-btn" id="format-btn">Format</button>
             <button class="toolbar-btn" id="open-file-btn">Open</button>
-            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">Search</button>
             <button class="toolbar-btn" id="new-file-btn" title="New File">New File</button>
             <button class="toolbar-btn" id="new-folder-btn" title="New Folder">New Folder</button>
           </div>
@@ -117,7 +100,6 @@ export function initializeUI(): void {
             <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
           </div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">Theme</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -160,27 +142,17 @@ export function initializeUI(): void {
   setupEventListeners()
   setupResizeHandles()
   setupCodeMirrorEditor()
+
+  // Открываем папку Japp по умолчанию
+  setTimeout(() => {
+    const defaultPath = '/Volumes/DEV/Japp'
+    state.currentFolder = defaultPath
+    loadFileTree(defaultPath)
+    updateGitStatus(defaultPath)
+  }, 100)
 }
 
 function setupEventListeners(): void {
-  // Кнопка сохранения
-  document.getElementById('save-btn')?.addEventListener('click', () => {
-    console.log('Save clicked')
-    saveCurrentFile()
-  })
-
-  // Обновление файлов
-  document.getElementById('refresh-files')?.addEventListener('click', () => {
-    console.log('Refresh files clicked')
-    if (state.currentFolder) {
-      loadFileTree(state.currentFolder)
-    }
-  })
-
-  // Открытие папки
-  document.getElementById('open-folder-btn')?.addEventListener('click', openFolder)
-  document.getElementById('empty-open-folder')?.addEventListener('click', openFolder)
-
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
 
@@ -193,14 +165,6 @@ function setupEventListeners(): void {
     console.log('Format clicked')
     formatMarkdown()
   })
-
-  // Search panel
-  document.getElementById('search-btn')?.addEventListener('click', toggleSearchPanel)
-  document.getElementById('close-search')?.addEventListener('click', closeSearchPanel)
-  document.getElementById('search-next')?.addEventListener('click', () => performSearch('next'))
-  document.getElementById('search-prev')?.addEventListener('click', () => performSearch('prev'))
-  document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
-  document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
 
   // View mode toggle (Edit/Preview)
   document.querySelectorAll('.view-mode-btn').forEach(btn => {
@@ -261,128 +225,6 @@ function setupEventListeners(): void {
 }
 
 // Search functionality
-let searchQuery = ''
-let searchResults: { from: number; to: number }[] = []
-let currentResultIndex = -1
-
-function toggleSearchPanel(): void {
-  const panel = document.getElementById('search-panel')
-  if (panel?.classList.contains('hidden')) {
-    panel.classList.remove('hidden')
-    document.getElementById('search-input')?.focus()
-  } else {
-    closeSearchPanel()
-  }
-}
-
-function closeSearchPanel(): void {
-  const panel = document.getElementById('search-panel')
-  panel?.classList.add('hidden')
-  searchQuery = ''
-  searchResults = []
-  currentResultIndex = -1
-}
-
-function performSearch(direction: 'next' | 'prev'): void {
-  const searchInput = document.getElementById('search-input') as HTMLInputElement
-  const query = searchInput?.value
-
-  if (!query || !cmEditor) return
-
-  if (query !== searchQuery) {
-    searchQuery = query
-    searchResults = findAllMatches(query)
-    currentResultIndex = searchResults.length > 0 ? 0 : -1
-  }
-
-  if (searchResults.length === 0) {
-    updateSearchResults('No results')
-    return
-  }
-
-  if (direction === 'next') {
-    currentResultIndex = (currentResultIndex + 1) % searchResults.length
-  } else {
-    currentResultIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length
-  }
-
-  highlightMatch(searchResults[currentResultIndex])
-  updateSearchResults(`${currentResultIndex + 1} of ${searchResults.length}`)
-}
-
-function findAllMatches(query: string): { from: number; to: number }[] {
-  if (!cmEditor) return []
-
-  const content = cmEditor.state.doc.toString()
-  const results: { from: number; to: number }[] = []
-  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-
-  let match
-  while ((match = regex.exec(content)) !== null) {
-    results.push({ from: match.index, to: match.index + match[0].length })
-  }
-
-  return results
-}
-
-function highlightMatch(match: { from: number; to: number }): void {
-  if (!cmEditor) return
-
-  cmEditor.dispatch({
-    selection: { anchor: match.from, head: match.to },
-    scrollIntoView: true,
-  })
-  cmEditor.focus()
-}
-
-function replaceCurrent(): void {
-  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
-  const replacement = replaceInput?.value || ''
-
-  if (currentResultIndex >= 0 && searchResults[currentResultIndex] && cmEditor) {
-    const match = searchResults[currentResultIndex]
-    cmEditor.dispatch({
-      changes: { from: match.from, to: match.to, insert: replacement },
-    })
-    searchResults = findAllMatches(searchQuery)
-    if (currentResultIndex >= searchResults.length) {
-      currentResultIndex = Math.max(0, searchResults.length - 1)
-    }
-    if (searchResults.length > 0) {
-      highlightMatch(searchResults[currentResultIndex])
-    }
-    updateSearchResults(`${searchResults.length} results`)
-  }
-}
-
-function replaceAll(): void {
-  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
-  const replacement = replaceInput?.value || ''
-
-  if (!cmEditor || !searchQuery) return
-
-  const content = cmEditor.state.doc.toString()
-  const newContent = content.replace(
-    new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
-    replacement
-  )
-
-  cmEditor.dispatch({
-    changes: { from: 0, to: cmEditor.state.doc.length, insert: newContent },
-  })
-
-  searchResults = []
-  currentResultIndex = -1
-  updateSearchResults('All replaced')
-}
-
-function updateSearchResults(text: string): void {
-  const resultsEl = document.getElementById('search-results')
-  if (resultsEl) {
-    resultsEl.textContent = text
-  }
-}
-
 // Git functions
 async function gitCommit(): Promise<void> {
   if (!state.currentFolder) {
@@ -746,12 +588,6 @@ function setupFileTreeListeners(): void {
       }, 150)
     )
   }
-
-  // Collapse all button
-  document.getElementById('collapse-all-btn')?.addEventListener('click', () => {
-    state.fileTree.expandedPaths.clear()
-    renderFileTreeUI()
-  })
 }
 
 async function toggleFolder(folderPath: string): Promise<void> {
@@ -804,7 +640,9 @@ async function createNewFile(): Promise<void> {
   const fileName = prompt('Enter file name:', 'untitled.md')
   if (!fileName) return
 
+  console.log('Creating file:', state.currentFolder, fileName)
   const result = await window.electronAPI?.createFile(state.currentFolder, fileName)
+  console.log('Create file result:', result)
   if (result?.success) {
     showNotification('File created', 'success')
     loadFileTree(state.currentFolder)
@@ -822,7 +660,9 @@ async function createNewFolder(): Promise<void> {
   const folderName = prompt('Enter folder name:', 'new-folder')
   if (!folderName) return
 
+  console.log('Creating folder:', state.currentFolder, folderName)
   const result = await window.electronAPI?.createFolder(state.currentFolder, folderName)
+  console.log('Create folder result:', result)
   if (result?.success) {
     showNotification('Folder created', 'success')
     loadFileTree(state.currentFolder)
