@@ -124,18 +124,6 @@ export function initializeUI(): void {
             </div>
           </div>
         </div>
-          <div class="toolbar-center">
-            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">✓ Commit</button>
-            <button class="toolbar-btn git-btn" id="git-push" title="Push">↑ Push</button>
-            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">↓ Pull</button>
-          </div>
-          <div class="toolbar-right">
-            <div class="view-mode-toggle">
-              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
-              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
-            </div>
-          </div>
-        </div>
         
         <div class="editor-content-wrapper" id="editor-content-wrapper">
           <div class="editor-pane" id="editor-pane">
