@@ -68,9 +68,6 @@ export function initializeUI(): void {
   const app = document.getElementById('app')
   if (!app) return
 
-  // Initialize theme
-  initializeTheme()
-
   app.innerHTML = `
     <div class="titlebar-drag-area"></div>
     
@@ -113,29 +110,24 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
             <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">🔍 Search</button>
           </div>
+          <div class="toolbar-center">
+            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">✓ Commit</button>
+            <button class="toolbar-btn git-btn" id="git-push" title="Push">↑ Push</button>
+            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">↓ Pull</button>
+          </div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">🌙</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
             </div>
           </div>
         </div>
-        
-        <!-- Search Panel -->
-        <div class="search-panel hidden" id="search-panel">
-          <div class="search-row">
-            <input type="text" id="search-input" placeholder="Search..." />
-            <input type="text" id="replace-input" placeholder="Replace..." />
+          <div class="toolbar-right">
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+            </div>
           </div>
-          <div class="search-actions">
-            <button class="search-action-btn" id="search-prev">↑ Prev</button>
-            <button class="search-action-btn" id="search-next">↓ Next</button>
-            <button class="search-action-btn" id="replace-btn">Replace</button>
-            <button class="search-action-btn" id="replace-all-btn">Replace All</button>
-            <button class="search-action-btn" id="close-search">✕</button>
-          </div>
-          <div class="search-results" id="search-results"></div>
         </div>
         
         <div class="editor-content-wrapper" id="editor-content-wrapper">
@@ -175,27 +167,6 @@ export function initializeUI(): void {
   setupCodeMirrorEditor()
 }
 
-function initializeTheme(): void {
-  const savedTheme = localStorage.getItem('theme') || 'dark'
-  document.documentElement.setAttribute('data-theme', savedTheme)
-  updateThemeButton(savedTheme)
-}
-
-function toggleTheme(): void {
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
-  document.documentElement.setAttribute('data-theme', newTheme)
-  localStorage.setItem('theme', newTheme)
-  updateThemeButton(newTheme)
-}
-
-function updateThemeButton(theme: string): void {
-  const btn = document.getElementById('theme-toggle')
-  if (btn) {
-    btn.textContent = theme === 'dark' ? '🌙' : '☀️'
-  }
-}
-
 function setupEventListeners(): void {
   // Кнопка сохранения
   document.getElementById('save-btn')?.addEventListener('click', () => {
@@ -218,33 +189,10 @@ function setupEventListeners(): void {
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
 
-  // Переключение темы
-  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme)
-
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
     console.log('Format clicked')
     formatMarkdown()
-  })
-
-  // Переключение режимов отображения (Edit / Preview)
-  document.querySelectorAll('.view-mode-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const target = e.currentTarget as HTMLElement
-      const mode = target.dataset.mode
-
-      if (mode) {
-        toggleEditorMode(mode)
-
-        // Обновляем активное состояние кнопок
-        document.querySelectorAll('.view-mode-btn').forEach(b => {
-          b.classList.remove('active')
-        })
-        target.classList.add('active')
-
-        showNotification(`Switched to ${mode} mode`, 'info')
-      }
-    })
   })
 
   // Search panel
@@ -262,6 +210,11 @@ function setupEventListeners(): void {
       toggleSearchPanel()
     }
   })
+
+  // Git buttons
+  document.getElementById('git-commit')?.addEventListener('click', gitCommit)
+  document.getElementById('git-push')?.addEventListener('click', gitPush)
+  document.getElementById('git-pull')?.addEventListener('click', gitPull)
 }
 
 // Search functionality
@@ -387,31 +340,52 @@ function updateSearchResults(text: string): void {
   }
 }
 
-// Переключение между режимами Edit и Preview
-function toggleEditorMode(mode: string): void {
-  const editorPane = document.getElementById('editor-pane')
-  const previewPane = document.getElementById('preview-pane')
+// Git functions
+async function gitCommit(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
 
-  if (!editorPane || !previewPane) return
+  const message = prompt('Enter commit message:')
+  if (!message) return
 
-  if (mode === 'edit') {
-    editorPane.classList.remove('hidden')
-    previewPane.classList.add('hidden')
-  } else if (mode === 'preview') {
-    editorPane.classList.add('hidden')
-    previewPane.classList.remove('hidden')
-    updatePreview()
+  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+  if (result?.success) {
+    showNotification('Commit successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Commit failed', 'error')
   }
 }
 
-// Обновление preview
-async function updatePreview(): Promise<void> {
-  const previewContent = document.getElementById('preview-content')
-  if (!cmEditor || !previewContent) return
+async function gitPush(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
 
-  const content = getEditorContent(cmEditor)
-  const html = await parseMarkdown(content)
-  previewContent.innerHTML = html
+  const result = await window.electronAPI?.gitPush(state.currentFolder)
+  if (result?.success) {
+    showNotification('Push successful', 'success')
+  } else {
+    showNotification(result?.error || 'Push failed', 'error')
+  }
+}
+
+async function gitPull(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const result = await window.electronAPI?.gitPull(state.currentFolder)
+  if (result?.success) {
+    showNotification('Pull successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Pull failed', 'error')
+  }
 }
 
 function setupResizeHandles(): void {
@@ -829,15 +803,30 @@ function formatMarkdown(): void {
   showNotification('Markdown formatted', 'success')
 }
 
-async function updateGitStatus(_folderPath: string): Promise<void> {
+async function updateGitStatus(folderPath: string): Promise<void> {
   const statusGit = document.getElementById('status-git')
-  if (!statusGit) return
+  if (!statusGit || !folderPath) return
 
-  // Placeholder for git status - will be implemented in Block 7
-  statusGit.innerHTML = `
-    <span class="git-branch">$(git-branch)</span>
-    <span class="git-changes">Git not integrated yet</span>
-  `
+  try {
+    const [branchResult, statusResult] = await Promise.all([
+      window.electronAPI?.gitBranch(folderPath),
+      window.electronAPI?.gitStatus(folderPath),
+    ])
+
+    const branch = branchResult?.success ? branchResult.branch : 'No repo'
+    const files = statusResult?.success && statusResult.isRepo ? statusResult.files || [] : []
+    const changedCount = files.length
+
+    statusGit.innerHTML = `
+      <span class="git-branch">${branch}</span>
+      <span class="git-changes">${changedCount} changes</span>
+    `
+  } catch {
+    statusGit.innerHTML = `
+      <span class="git-branch">Not a git repo</span>
+      <span class="git-changes"></span>
+    `
+  }
 }
 
 function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
