@@ -39,6 +39,36 @@ export interface ElectronAPI {
   // Events management
   onWindowEvent: (callback: (event: string, data?: any) => void) => void
   removeAllListeners: (channel: string) => void
+
+  // Git
+  gitStatus: (cwd: string) => Promise<{
+    success: boolean
+    isRepo?: boolean
+    files?: Array<{ status: string; path: string }>
+    error?: string
+  }>
+  gitDiff: (
+    cwd: string,
+    filePath?: string
+  ) => Promise<{ success: boolean; diff?: string; error?: string }>
+  gitCommit: (
+    cwd: string,
+    message: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitBranch: (cwd: string) => Promise<{ success: boolean; branch?: string; error?: string }>
+  gitPush: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitPull: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
+
+  // File/Folder operations
+  createFile: (
+    dirPath: string,
+    fileName: string
+  ) => Promise<{ success: boolean; path?: string; error?: string }>
+  createFolder: (
+    dirPath: string,
+    folderName: string
+  ) => Promise<{ success: boolean; path?: string; error?: string }>
+  deleteItem: (itemPath: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // Безопасный API через contextBridge
@@ -99,6 +129,21 @@ const electronAPI: ElectronAPI = {
   removeAllListeners: (channel: string) => {
     ipcRenderer.removeAllListeners(channel)
   },
+
+  // Git
+  gitStatus: (cwd: string) => ipcRenderer.invoke('git-status', cwd),
+  gitDiff: (cwd: string, filePath?: string) => ipcRenderer.invoke('git-diff', cwd, filePath),
+  gitCommit: (cwd: string, message: string) => ipcRenderer.invoke('git-commit', cwd, message),
+  gitBranch: (cwd: string) => ipcRenderer.invoke('git-branch', cwd),
+  gitPush: (cwd: string) => ipcRenderer.invoke('git-push', cwd),
+  gitPull: (cwd: string) => ipcRenderer.invoke('git-pull', cwd),
+
+  // File/Folder operations
+  createFile: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('create-file', dirPath, fileName),
+  createFolder: (dirPath: string, folderName: string) =>
+    ipcRenderer.invoke('create-folder', dirPath, folderName),
+  deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

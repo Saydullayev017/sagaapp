@@ -80,18 +80,17 @@ export function initializeUI(): void {
             <span class="file-count" id="file-count"></span>
           </div>
           <div class="sidebar-actions">
-            <button class="icon-button" id="open-folder-btn" title="Open Folder">📁</button>
-            <button class="icon-button" id="refresh-files" title="Refresh">⟳</button>
-            <button class="icon-button" id="collapse-all-btn" title="Collapse All">⏬</button>
+            <button class="icon-button" id="open-folder-btn" title="Open Folder">Open</button>
+            <button class="icon-button" id="refresh-files" title="Refresh">Refresh</button>
+            <button class="icon-button" id="collapse-all-btn" title="Collapse All">Collapse</button>
           </div>
         </div>
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="file-tree-search">
-          <input type="text" id="tree-search" placeholder="🔍 Search files..." />
+          <input type="text" id="tree-search" placeholder="Search files..." />
         </div>
         <div class="file-tree" id="file-tree">
           <div class="empty-state">
-            <div class="empty-icon">📂</div>
             <div class="empty-text">No folder opened</div>
             <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
           </div>
@@ -105,14 +104,23 @@ export function initializeUI(): void {
       <main class="editor-container">
         <div class="editor-toolbar">
           <div class="toolbar-left">
-            <button class="toolbar-btn" id="save-btn">💾 Save</button>
-            <button class="toolbar-btn" id="format-btn">✨ Format</button>
-            <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
+            <button class="toolbar-btn" id="save-btn">Save</button>
+            <button class="toolbar-btn" id="format-btn">Format</button>
+            <button class="toolbar-btn" id="open-file-btn">Open</button>
+            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">Search</button>
+            <button class="toolbar-btn" id="new-file-btn" title="New File">New File</button>
+            <button class="toolbar-btn" id="new-folder-btn" title="New Folder">New Folder</button>
+          </div>
+          <div class="toolbar-center">
+            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">Commit</button>
+            <button class="toolbar-btn git-btn" id="git-push" title="Push">Push</button>
+            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
           </div>
           <div class="toolbar-right">
+            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">Theme</button>
             <div class="view-mode-toggle">
-              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
-              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
             </div>
           </div>
         </div>
@@ -176,58 +184,251 @@ function setupEventListeners(): void {
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
 
+  // Новый файл/папка
+  document.getElementById('new-file-btn')?.addEventListener('click', createNewFile)
+  document.getElementById('new-folder-btn')?.addEventListener('click', createNewFolder)
+
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
     console.log('Format clicked')
     formatMarkdown()
   })
 
-  // Переключение режимов отображения (Edit / Preview)
+  // Search panel
+  document.getElementById('search-btn')?.addEventListener('click', toggleSearchPanel)
+  document.getElementById('close-search')?.addEventListener('click', closeSearchPanel)
+  document.getElementById('search-next')?.addEventListener('click', () => performSearch('next'))
+  document.getElementById('search-prev')?.addEventListener('click', () => performSearch('prev'))
+  document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
+  document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
+
+  // View mode toggle (Edit/Preview)
   document.querySelectorAll('.view-mode-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       const target = e.currentTarget as HTMLElement
       const mode = target.dataset.mode
-
       if (mode) {
         toggleEditorMode(mode)
-
-        // Обновляем активное состояние кнопок
-        document.querySelectorAll('.view-mode-btn').forEach(b => {
-          b.classList.remove('active')
-        })
+        document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.remove('active'))
         target.classList.add('active')
-
-        showNotification(`Switched to ${mode} mode`, 'info')
       }
     })
   })
+
+  // Keyboard shortcuts - use window for better capture
+  window.addEventListener('keydown', e => {
+    const isMod = e.ctrlKey || e.metaKey
+
+    // Ctrl/Cmd+B: Toggle sidebar (file tree)
+    if (isMod && e.key === 'b') {
+      e.preventDefault()
+      toggleSidebar()
+    }
+
+    // Ctrl/Cmd+F: Focus on file search in sidebar
+    if (isMod && e.key === 'f') {
+      e.preventDefault()
+      const sidebar = document.getElementById('sidebar')
+      if (sidebar && !sidebar.classList.contains('hidden')) {
+        const searchInput = document.getElementById('tree-search') as HTMLInputElement
+        searchInput?.focus()
+      } else {
+        toggleSidebar()
+        setTimeout(() => {
+          const searchInput = document.getElementById('tree-search') as HTMLInputElement
+          searchInput?.focus()
+        }, 100)
+      }
+    }
+
+    // Ctrl/Cmd+P: Toggle preview
+    if (isMod && e.key === 'p') {
+      e.preventDefault()
+      togglePreview()
+    }
+
+    // Ctrl/Cmd+S: Save
+    if (isMod && e.key === 's') {
+      e.preventDefault()
+      saveCurrentFile()
+    }
+  })
+
+  // Git buttons
+  document.getElementById('git-commit')?.addEventListener('click', gitCommit)
+  document.getElementById('git-push')?.addEventListener('click', gitPush)
+  document.getElementById('git-pull')?.addEventListener('click', gitPull)
 }
 
-// Переключение между режимами Edit и Preview
-function toggleEditorMode(mode: string): void {
-  const editorPane = document.getElementById('editor-pane')
-  const previewPane = document.getElementById('preview-pane')
+// Search functionality
+let searchQuery = ''
+let searchResults: { from: number; to: number }[] = []
+let currentResultIndex = -1
 
-  if (!editorPane || !previewPane) return
-
-  if (mode === 'edit') {
-    editorPane.classList.remove('hidden')
-    previewPane.classList.add('hidden')
-  } else if (mode === 'preview') {
-    editorPane.classList.add('hidden')
-    previewPane.classList.remove('hidden')
-    updatePreview()
+function toggleSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  if (panel?.classList.contains('hidden')) {
+    panel.classList.remove('hidden')
+    document.getElementById('search-input')?.focus()
+  } else {
+    closeSearchPanel()
   }
 }
 
-// Обновление preview
-async function updatePreview(): Promise<void> {
-  const previewContent = document.getElementById('preview-content')
-  if (!cmEditor || !previewContent) return
+function closeSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  panel?.classList.add('hidden')
+  searchQuery = ''
+  searchResults = []
+  currentResultIndex = -1
+}
 
-  const content = getEditorContent(cmEditor)
-  const html = await parseMarkdown(content)
-  previewContent.innerHTML = html
+function performSearch(direction: 'next' | 'prev'): void {
+  const searchInput = document.getElementById('search-input') as HTMLInputElement
+  const query = searchInput?.value
+
+  if (!query || !cmEditor) return
+
+  if (query !== searchQuery) {
+    searchQuery = query
+    searchResults = findAllMatches(query)
+    currentResultIndex = searchResults.length > 0 ? 0 : -1
+  }
+
+  if (searchResults.length === 0) {
+    updateSearchResults('No results')
+    return
+  }
+
+  if (direction === 'next') {
+    currentResultIndex = (currentResultIndex + 1) % searchResults.length
+  } else {
+    currentResultIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length
+  }
+
+  highlightMatch(searchResults[currentResultIndex])
+  updateSearchResults(`${currentResultIndex + 1} of ${searchResults.length}`)
+}
+
+function findAllMatches(query: string): { from: number; to: number }[] {
+  if (!cmEditor) return []
+
+  const content = cmEditor.state.doc.toString()
+  const results: { from: number; to: number }[] = []
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    results.push({ from: match.index, to: match.index + match[0].length })
+  }
+
+  return results
+}
+
+function highlightMatch(match: { from: number; to: number }): void {
+  if (!cmEditor) return
+
+  cmEditor.dispatch({
+    selection: { anchor: match.from, head: match.to },
+    scrollIntoView: true,
+  })
+  cmEditor.focus()
+}
+
+function replaceCurrent(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (currentResultIndex >= 0 && searchResults[currentResultIndex] && cmEditor) {
+    const match = searchResults[currentResultIndex]
+    cmEditor.dispatch({
+      changes: { from: match.from, to: match.to, insert: replacement },
+    })
+    searchResults = findAllMatches(searchQuery)
+    if (currentResultIndex >= searchResults.length) {
+      currentResultIndex = Math.max(0, searchResults.length - 1)
+    }
+    if (searchResults.length > 0) {
+      highlightMatch(searchResults[currentResultIndex])
+    }
+    updateSearchResults(`${searchResults.length} results`)
+  }
+}
+
+function replaceAll(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (!cmEditor || !searchQuery) return
+
+  const content = cmEditor.state.doc.toString()
+  const newContent = content.replace(
+    new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+    replacement
+  )
+
+  cmEditor.dispatch({
+    changes: { from: 0, to: cmEditor.state.doc.length, insert: newContent },
+  })
+
+  searchResults = []
+  currentResultIndex = -1
+  updateSearchResults('All replaced')
+}
+
+function updateSearchResults(text: string): void {
+  const resultsEl = document.getElementById('search-results')
+  if (resultsEl) {
+    resultsEl.textContent = text
+  }
+}
+
+// Git functions
+async function gitCommit(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const message = prompt('Enter commit message:')
+  if (!message) return
+
+  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+  if (result?.success) {
+    showNotification('Commit successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Commit failed', 'error')
+  }
+}
+
+async function gitPush(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const result = await window.electronAPI?.gitPush(state.currentFolder)
+  if (result?.success) {
+    showNotification('Push successful', 'success')
+  } else {
+    showNotification(result?.error || 'Push failed', 'error')
+  }
+}
+
+async function gitPull(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const result = await window.electronAPI?.gitPull(state.currentFolder)
+  if (result?.success) {
+    showNotification('Pull successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Pull failed', 'error')
+  }
 }
 
 function setupResizeHandles(): void {
@@ -289,6 +490,65 @@ function updateCursorPosition(): void {
   const statusLine = document.getElementById('status-line')
   if (statusLine) {
     statusLine.textContent = `Ln ${state.line}, Col ${state.column}`
+  }
+}
+
+function toggleEditorMode(mode: string): void {
+  const editorPane = document.getElementById('editor-pane')
+  const previewPane = document.getElementById('preview-pane')
+  if (!editorPane || !previewPane) return
+
+  if (mode === 'edit') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.add('hidden')
+  } else if (mode === 'preview') {
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+  }
+}
+
+async function updatePreview(): Promise<void> {
+  const previewContent = document.getElementById('preview-content')
+  if (!cmEditor || !previewContent) return
+
+  const content = getEditorContent(cmEditor)
+  const html = await parseMarkdown(content)
+  previewContent.innerHTML = html
+}
+
+function toggleSidebar(): void {
+  const sidebar = document.getElementById('sidebar')
+  if (!sidebar) return
+
+  if (sidebar.classList.contains('hidden')) {
+    sidebar.classList.remove('hidden')
+  } else {
+    sidebar.classList.add('hidden')
+  }
+}
+
+function togglePreview(): void {
+  const previewPane = document.getElementById('preview-pane')
+  const editorPane = document.getElementById('editor-pane')
+  const previewBtn = document.querySelector('.view-mode-btn[data-mode="preview"]')
+  const editBtn = document.querySelector('.view-mode-btn[data-mode="edit"]')
+
+  if (!previewPane || !editorPane) return
+
+  if (previewPane.classList.contains('hidden')) {
+    // Switch to preview
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+    previewBtn?.classList.add('active')
+    editBtn?.classList.remove('active')
+  } else {
+    // Switch to edit
+    previewPane.classList.add('hidden')
+    editorPane.classList.remove('hidden')
+    previewBtn?.classList.remove('active')
+    editBtn?.classList.add('active')
   }
 }
 
@@ -381,13 +641,12 @@ function filterNodes(nodes: TreeNode[]): TreeNode[] {
   const filter = state.fileTree.filterText.toLowerCase()
 
   return nodes.filter(node => {
-    // Always show directories
-    if (node.type === 'directory') return true
-    // Filter markdown files
-    if (!filter) {
-      return node.name.endsWith('.md') || node.name.endsWith('.markdown')
+    // If there's a filter, search by name
+    if (filter) {
+      return node.name.toLowerCase().includes(filter)
     }
-    return node.name.toLowerCase().includes(filter)
+    // Show all files and directories
+    return true
   })
 }
 
@@ -401,7 +660,7 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
     .map(node => {
       const isExpanded = state.fileTree.expandedPaths.has(node.path)
       const isSelected = state.fileTree.selectedPath === node.path
-      const paddingLeft = 12 + depth * 12
+      const paddingLeft = 12 + depth * 16
 
       if (node.type === 'directory') {
         return `
@@ -410,8 +669,9 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
                  data-path="${node.path}" 
                  data-type="directory"
                  style="padding-left: 0">
-              <span class="tree-toggle">${isExpanded ? '▼' : '▶'}</span>
-              <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
+              <span class="tree-line"></span>
+              <span class="tree-toggle">${isExpanded ? '-' : '+'}</span>
+              <span class="tree-icon">${isExpanded ? '[+]' : '[·]'}</span>
               <span class="tree-label">${escapeHtml(node.name)}</span>
             </div>
             <div class="tree-children" 
@@ -421,15 +681,15 @@ function renderTreeNodes(nodes: TreeNode[], depth: number): string {
           </div>
         `
       } else {
-        const icon = getFileIcon(node.name)
         return `
           <div class="tree-item tree-file" style="padding-left: ${paddingLeft}px">
             <div class="tree-item-content ${isSelected ? 'active' : ''}" 
                  data-path="${node.path}" 
                  data-type="file"
                  style="padding-left: 0">
-              <span class="tree-toggle" style="visibility: hidden">▶</span>
-              <span class="tree-icon">${icon}</span>
+              <span class="tree-line"></span>
+              <span class="tree-toggle" style="visibility: hidden">+</span>
+              <span class="tree-icon">·</span>
               <span class="tree-label">${escapeHtml(node.name)}</span>
             </div>
           </div>
@@ -443,18 +703,6 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
-}
-
-function getFileIcon(filename: string): string {
-  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return '📝'
-  if (filename.endsWith('.json')) return '📋'
-  if (filename.endsWith('.js') || filename.endsWith('.ts')) return '💻'
-  if (filename.endsWith('.css') || filename.endsWith('.scss')) return '🎨'
-  if (filename.endsWith('.html')) return '🌐'
-  if (filename.endsWith('.txt')) return '📄'
-  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return '⚙️'
-  if (filename.endsWith('.gitignore')) return '🔒'
-  return '📄'
 }
 
 function encodePath(path: string): string {
@@ -544,6 +792,42 @@ async function loadFolderContents(folderPath: string, container: HTMLElement): P
     }))
     container.innerHTML = renderTreeNodes(nodes, 1)
     setupFileTreeListeners()
+  }
+}
+
+async function createNewFile(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const fileName = prompt('Enter file name:', 'untitled.md')
+  if (!fileName) return
+
+  const result = await window.electronAPI?.createFile(state.currentFolder, fileName)
+  if (result?.success) {
+    showNotification('File created', 'success')
+    loadFileTree(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Failed to create file', 'error')
+  }
+}
+
+async function createNewFolder(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const folderName = prompt('Enter folder name:', 'new-folder')
+  if (!folderName) return
+
+  const result = await window.electronAPI?.createFolder(state.currentFolder, folderName)
+  if (result?.success) {
+    showNotification('Folder created', 'success')
+    loadFileTree(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Failed to create folder', 'error')
   }
 }
 
@@ -645,15 +929,30 @@ function formatMarkdown(): void {
   showNotification('Markdown formatted', 'success')
 }
 
-async function updateGitStatus(_folderPath: string): Promise<void> {
+async function updateGitStatus(folderPath: string): Promise<void> {
   const statusGit = document.getElementById('status-git')
-  if (!statusGit) return
+  if (!statusGit || !folderPath) return
 
-  // Placeholder for git status - will be implemented in Block 7
-  statusGit.innerHTML = `
-    <span class="git-branch">$(git-branch)</span>
-    <span class="git-changes">Git not integrated yet</span>
-  `
+  try {
+    const [branchResult, statusResult] = await Promise.all([
+      window.electronAPI?.gitBranch(folderPath),
+      window.electronAPI?.gitStatus(folderPath),
+    ])
+
+    const branch = branchResult?.success ? branchResult.branch : 'No repo'
+    const files = statusResult?.success && statusResult.isRepo ? statusResult.files || [] : []
+    const changedCount = files.length
+
+    statusGit.innerHTML = `
+      <span class="git-branch">${branch}</span>
+      <span class="git-changes">${changedCount} changes</span>
+    `
+  } catch {
+    statusGit.innerHTML = `
+      <span class="git-branch">Not a git repo</span>
+      <span class="git-changes"></span>
+    `
+  }
 }
 
 function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {

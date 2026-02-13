@@ -1,6 +1,10 @@
 import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import fs from 'fs/promises'
 import path from 'path'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 // Валидация путей для безопасности
 const validatePath = (filePath: string): boolean => {
@@ -174,6 +178,106 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('is-dev', () => {
     return process.env.NODE_ENV === 'development'
+  })
+
+  // Git handlers
+  ipcMain.handle('git-status', async (_event, cwd: string) => {
+    try {
+      const { stdout } = await execAsync('git status --porcelain', { cwd })
+      const files = stdout.trim().split('\n').filter(Boolean)
+      const status = {
+        isRepo: true,
+        files: files.map(line => ({
+          status: line.substring(0, 2).trim(),
+          path: line.substring(3).trim(),
+        })),
+      }
+      return { success: true, ...status }
+    } catch (error: any) {
+      return { success: false, isRepo: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-diff', async (_event, cwd: string, filePath?: string) => {
+    try {
+      const cmd = filePath ? `git diff "${filePath}"` : 'git diff'
+      const { stdout } = await execAsync(cmd, { cwd })
+      return { success: true, diff: stdout }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-commit', async (_event, cwd: string, message: string) => {
+    try {
+      await execAsync('git add -A', { cwd })
+      const { stdout } = await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd })
+      return { success: true, output: stdout }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-branch', async (_event, cwd: string) => {
+    try {
+      const { stdout } = await execAsync('git branch --show-current', { cwd })
+      return { success: true, branch: stdout.trim() }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-push', async (_event, cwd: string) => {
+    try {
+      const { stdout, stderr } = await execAsync('git push', { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-pull', async (_event, cwd: string) => {
+    try {
+      const { stdout, stderr } = await execAsync('git pull', { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // File/Folder creation
+  ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
+    try {
+      const filePath = path.join(dirPath, fileName)
+      await fs.writeFile(filePath, '', 'utf-8')
+      return { success: true, path: filePath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('create-folder', async (_event, dirPath: string, folderName: string) => {
+    try {
+      const folderPath = path.join(dirPath, folderName)
+      await fs.mkdir(folderPath, { recursive: true })
+      return { success: true, path: folderPath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('delete-item', async (_event, itemPath: string) => {
+    try {
+      const stats = await fs.stat(itemPath)
+      if (stats.isDirectory()) {
+        await fs.rm(itemPath, { recursive: true })
+      } else {
+        await fs.unlink(itemPath)
+      }
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
   })
 }
 
