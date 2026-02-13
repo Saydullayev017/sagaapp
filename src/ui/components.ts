@@ -108,7 +108,20 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="save-btn">💾 Save</button>
             <button class="toolbar-btn" id="format-btn">✨ Format</button>
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
+            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">🔍 Search</button>
           </div>
+          <div class="toolbar-center">
+            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">✓ Commit</button>
+            <button class="toolbar-btn git-btn" id="git-push" title="Push">↑ Push</button>
+            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">↓ Pull</button>
+          </div>
+          <div class="toolbar-right">
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+            </div>
+          </div>
+        </div>
           <div class="toolbar-right">
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
@@ -182,52 +195,197 @@ function setupEventListeners(): void {
     formatMarkdown()
   })
 
-  // Переключение режимов отображения (Edit / Preview)
-  document.querySelectorAll('.view-mode-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const target = e.currentTarget as HTMLElement
-      const mode = target.dataset.mode
+  // Search panel
+  document.getElementById('search-btn')?.addEventListener('click', toggleSearchPanel)
+  document.getElementById('close-search')?.addEventListener('click', closeSearchPanel)
+  document.getElementById('search-next')?.addEventListener('click', () => performSearch('next'))
+  document.getElementById('search-prev')?.addEventListener('click', () => performSearch('prev'))
+  document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
+  document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
 
-      if (mode) {
-        toggleEditorMode(mode)
-
-        // Обновляем активное состояние кнопок
-        document.querySelectorAll('.view-mode-btn').forEach(b => {
-          b.classList.remove('active')
-        })
-        target.classList.add('active')
-
-        showNotification(`Switched to ${mode} mode`, 'info')
-      }
-    })
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault()
+      toggleSearchPanel()
+    }
   })
+
+  // Git buttons
+  document.getElementById('git-commit')?.addEventListener('click', gitCommit)
+  document.getElementById('git-push')?.addEventListener('click', gitPush)
+  document.getElementById('git-pull')?.addEventListener('click', gitPull)
 }
 
-// Переключение между режимами Edit и Preview
-function toggleEditorMode(mode: string): void {
-  const editorPane = document.getElementById('editor-pane')
-  const previewPane = document.getElementById('preview-pane')
+// Search functionality
+let searchQuery = ''
+let searchResults: { from: number; to: number }[] = []
+let currentResultIndex = -1
 
-  if (!editorPane || !previewPane) return
-
-  if (mode === 'edit') {
-    editorPane.classList.remove('hidden')
-    previewPane.classList.add('hidden')
-  } else if (mode === 'preview') {
-    editorPane.classList.add('hidden')
-    previewPane.classList.remove('hidden')
-    updatePreview()
+function toggleSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  if (panel?.classList.contains('hidden')) {
+    panel.classList.remove('hidden')
+    document.getElementById('search-input')?.focus()
+  } else {
+    closeSearchPanel()
   }
 }
 
-// Обновление preview
-async function updatePreview(): Promise<void> {
-  const previewContent = document.getElementById('preview-content')
-  if (!cmEditor || !previewContent) return
+function closeSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  panel?.classList.add('hidden')
+  searchQuery = ''
+  searchResults = []
+  currentResultIndex = -1
+}
 
-  const content = getEditorContent(cmEditor)
-  const html = await parseMarkdown(content)
-  previewContent.innerHTML = html
+function performSearch(direction: 'next' | 'prev'): void {
+  const searchInput = document.getElementById('search-input') as HTMLInputElement
+  const query = searchInput?.value
+
+  if (!query || !cmEditor) return
+
+  if (query !== searchQuery) {
+    searchQuery = query
+    searchResults = findAllMatches(query)
+    currentResultIndex = searchResults.length > 0 ? 0 : -1
+  }
+
+  if (searchResults.length === 0) {
+    updateSearchResults('No results')
+    return
+  }
+
+  if (direction === 'next') {
+    currentResultIndex = (currentResultIndex + 1) % searchResults.length
+  } else {
+    currentResultIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length
+  }
+
+  highlightMatch(searchResults[currentResultIndex])
+  updateSearchResults(`${currentResultIndex + 1} of ${searchResults.length}`)
+}
+
+function findAllMatches(query: string): { from: number; to: number }[] {
+  if (!cmEditor) return []
+
+  const content = cmEditor.state.doc.toString()
+  const results: { from: number; to: number }[] = []
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    results.push({ from: match.index, to: match.index + match[0].length })
+  }
+
+  return results
+}
+
+function highlightMatch(match: { from: number; to: number }): void {
+  if (!cmEditor) return
+
+  cmEditor.dispatch({
+    selection: { anchor: match.from, head: match.to },
+    scrollIntoView: true,
+  })
+  cmEditor.focus()
+}
+
+function replaceCurrent(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (currentResultIndex >= 0 && searchResults[currentResultIndex] && cmEditor) {
+    const match = searchResults[currentResultIndex]
+    cmEditor.dispatch({
+      changes: { from: match.from, to: match.to, insert: replacement },
+    })
+    searchResults = findAllMatches(searchQuery)
+    if (currentResultIndex >= searchResults.length) {
+      currentResultIndex = Math.max(0, searchResults.length - 1)
+    }
+    if (searchResults.length > 0) {
+      highlightMatch(searchResults[currentResultIndex])
+    }
+    updateSearchResults(`${searchResults.length} results`)
+  }
+}
+
+function replaceAll(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (!cmEditor || !searchQuery) return
+
+  const content = cmEditor.state.doc.toString()
+  const newContent = content.replace(
+    new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+    replacement
+  )
+
+  cmEditor.dispatch({
+    changes: { from: 0, to: cmEditor.state.doc.length, insert: newContent },
+  })
+
+  searchResults = []
+  currentResultIndex = -1
+  updateSearchResults('All replaced')
+}
+
+function updateSearchResults(text: string): void {
+  const resultsEl = document.getElementById('search-results')
+  if (resultsEl) {
+    resultsEl.textContent = text
+  }
+}
+
+// Git functions
+async function gitCommit(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const message = prompt('Enter commit message:')
+  if (!message) return
+
+  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+  if (result?.success) {
+    showNotification('Commit successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Commit failed', 'error')
+  }
+}
+
+async function gitPush(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const result = await window.electronAPI?.gitPush(state.currentFolder)
+  if (result?.success) {
+    showNotification('Push successful', 'success')
+  } else {
+    showNotification(result?.error || 'Push failed', 'error')
+  }
+}
+
+async function gitPull(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('No folder opened', 'error')
+    return
+  }
+
+  const result = await window.electronAPI?.gitPull(state.currentFolder)
+  if (result?.success) {
+    showNotification('Pull successful', 'success')
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Pull failed', 'error')
+  }
 }
 
 function setupResizeHandles(): void {
@@ -645,15 +803,30 @@ function formatMarkdown(): void {
   showNotification('Markdown formatted', 'success')
 }
 
-async function updateGitStatus(_folderPath: string): Promise<void> {
+async function updateGitStatus(folderPath: string): Promise<void> {
   const statusGit = document.getElementById('status-git')
-  if (!statusGit) return
+  if (!statusGit || !folderPath) return
 
-  // Placeholder for git status - will be implemented in Block 7
-  statusGit.innerHTML = `
-    <span class="git-branch">$(git-branch)</span>
-    <span class="git-changes">Git not integrated yet</span>
-  `
+  try {
+    const [branchResult, statusResult] = await Promise.all([
+      window.electronAPI?.gitBranch(folderPath),
+      window.electronAPI?.gitStatus(folderPath),
+    ])
+
+    const branch = branchResult?.success ? branchResult.branch : 'No repo'
+    const files = statusResult?.success && statusResult.isRepo ? statusResult.files || [] : []
+    const changedCount = files.length
+
+    statusGit.innerHTML = `
+      <span class="git-branch">${branch}</span>
+      <span class="git-changes">${changedCount} changes</span>
+    `
+  } catch {
+    statusGit.innerHTML = `
+      <span class="git-branch">Not a git repo</span>
+      <span class="git-changes"></span>
+    `
+  }
 }
 
 function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
