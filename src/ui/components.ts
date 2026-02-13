@@ -1,3 +1,33 @@
+import { EditorView } from '@codemirror/view'
+import {
+  createCodeMirrorEditor,
+  getEditorContent,
+  setEditorContent,
+  getCursorPosition,
+} from '../editor/codemirror'
+import { parseMarkdown } from '../editor/markdown-parser'
+
+// Types for file tree
+interface TreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  extension: string
+  size?: number
+  children?: TreeNode[]
+  isExpanded?: boolean
+}
+
+interface FileTreeState {
+  rootPath: string | null
+  nodes: TreeNode[]
+  expandedPaths: Set<string>
+  selectedPath: string | null
+  filterText: string
+  fileCount: number
+  folderCount: number
+}
+
 // State management
 interface UIState {
   currentFolder: string | null
@@ -5,9 +35,10 @@ interface UIState {
   expandedFolders: Set<string>
   sidebarWidth: number
   editorWidth: number
-  isPreviewVisible: boolean
+
   line: number
   column: number
+  fileTree: FileTreeState
 }
 
 const state: UIState = {
@@ -16,34 +47,52 @@ const state: UIState = {
   expandedFolders: new Set(),
   sidebarWidth: 280,
   editorWidth: 50,
-  isPreviewVisible: false,
+
   line: 1,
   column: 1,
+  fileTree: {
+    rootPath: null,
+    nodes: [],
+    expandedPaths: new Set(),
+    selectedPath: null,
+    filterText: '',
+    fileCount: 0,
+    folderCount: 0,
+  },
 }
+
+// CodeMirror editor instance
+let cmEditor: EditorView | null = null
 
 export function initializeUI(): void {
   const app = document.getElementById('app')
   if (!app) return
 
   app.innerHTML = `
-    <div class="window-controls">
-      <button class="window-control minimize" data-action="minimize">−</button>
-      <button class="window-control maximize" data-action="maximize">□</button>
-      <button class="window-control close" data-action="close">×</button>
-    </div>
+    <div class="titlebar-drag-area"></div>
     
     <div class="main-layout">
       <!-- Left Panel: Sidebar -->
       <aside class="sidebar" id="sidebar" style="width: ${state.sidebarWidth}px">
         <div class="sidebar-header">
-          <h3>Explorer</h3>
+          <div class="sidebar-title">
+            <h3>Explorer</h3>
+            <span class="file-count" id="file-count"></span>
+          </div>
           <div class="sidebar-actions">
             <button class="icon-button" id="open-folder-btn" title="Open Folder">📁</button>
             <button class="icon-button" id="refresh-files" title="Refresh">⟳</button>
+            <button class="icon-button" id="collapse-all-btn" title="Collapse All">⏬</button>
           </div>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-tree-search">
+          <input type="text" id="tree-search" placeholder="🔍 Search files..." />
         </div>
         <div class="file-tree" id="file-tree">
           <div class="empty-state">
+            <div class="empty-icon">📂</div>
+            <div class="empty-text">No folder opened</div>
             <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
           </div>
         </div>
@@ -61,22 +110,20 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
           </div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="preview-toggle">👁️ Preview</button>
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+            </div>
           </div>
         </div>
         
-        <div class="split-container" id="split-container">
-          <div class="editor-pane" id="editor-pane" style="width: ${state.editorWidth}%">
-            <textarea class="markdown-editor" id="editor" placeholder="# Start writing markdown here...&#10;&#10;Press Enter on a markdown line to see preview"></textarea>
+        <div class="editor-content-wrapper" id="editor-content-wrapper">
+          <div class="editor-pane" id="editor-pane">
+            <div class="codemirror-container" id="codemirror-editor"></div>
           </div>
           
-          <!-- Resize Handle for Editor/Preview -->
-          <div class="resize-handle resize-handle-split" id="resize-split"></div>
-          
-          <div class="preview-pane ${state.isPreviewVisible ? '' : 'hidden'}" id="preview">
-            <div class="preview-content" id="preview-content">
-              <div class="preview-placeholder">Preview will appear here when you press Enter on markdown lines</div>
-            </div>
+          <div class="preview-pane hidden" id="preview-pane">
+            <div class="preview-content" id="preview-content"></div>
           </div>
         </div>
       </main>
@@ -104,32 +151,14 @@ export function initializeUI(): void {
   // Добавляем обработчики событий
   setupEventListeners()
   setupResizeHandles()
-  setupEditorListeners()
+  setupCodeMirrorEditor()
 }
 
 function setupEventListeners(): void {
-  // Обработчики оконных кнопок
-  document.querySelectorAll('.window-control').forEach(button => {
-    button.addEventListener('click', e => {
-      const action = (e.target as HTMLElement).dataset.action
-      handleWindowControl(action)
-    })
-  })
-
   // Кнопка сохранения
   document.getElementById('save-btn')?.addEventListener('click', () => {
     console.log('Save clicked')
     saveCurrentFile()
-  })
-
-  // Переключение превью
-  document.getElementById('preview-toggle')?.addEventListener('click', () => {
-    const preview = document.getElementById('preview')
-    if (preview) {
-      preview.classList.toggle('hidden')
-      state.isPreviewVisible = !preview.classList.contains('hidden')
-      updatePreview()
-    }
   })
 
   // Обновление файлов
@@ -152,14 +181,58 @@ function setupEventListeners(): void {
     console.log('Format clicked')
     formatMarkdown()
   })
+
+  // Переключение режимов отображения (Edit / Preview)
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const mode = target.dataset.mode
+
+      if (mode) {
+        toggleEditorMode(mode)
+
+        // Обновляем активное состояние кнопок
+        document.querySelectorAll('.view-mode-btn').forEach(b => {
+          b.classList.remove('active')
+        })
+        target.classList.add('active')
+
+        showNotification(`Switched to ${mode} mode`, 'info')
+      }
+    })
+  })
+}
+
+// Переключение между режимами Edit и Preview
+function toggleEditorMode(mode: string): void {
+  const editorPane = document.getElementById('editor-pane')
+  const previewPane = document.getElementById('preview-pane')
+
+  if (!editorPane || !previewPane) return
+
+  if (mode === 'edit') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.add('hidden')
+  } else if (mode === 'preview') {
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+  }
+}
+
+// Обновление preview
+async function updatePreview(): Promise<void> {
+  const previewContent = document.getElementById('preview-content')
+  if (!cmEditor || !previewContent) return
+
+  const content = getEditorContent(cmEditor)
+  const html = await parseMarkdown(content)
+  previewContent.innerHTML = html
 }
 
 function setupResizeHandles(): void {
   const sidebarHandle = document.getElementById('resize-sidebar')
-  const splitHandle = document.getElementById('resize-split')
   const sidebar = document.getElementById('sidebar')
-  const editorPane = document.getElementById('editor-pane')
-  const container = document.getElementById('split-container')
 
   // Sidebar resize
   if (sidebarHandle && sidebar) {
@@ -190,80 +263,28 @@ function setupResizeHandles(): void {
       }
     })
   }
-
-  // Split pane resize
-  if (splitHandle && editorPane && container) {
-    let isResizing = false
-    let startX = 0
-    let startWidth = 0
-
-    splitHandle.addEventListener('mousedown', e => {
-      if (!state.isPreviewVisible) return
-      isResizing = true
-      startX = e.clientX
-      startWidth = editorPane.offsetWidth
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    })
-
-    document.addEventListener('mousemove', e => {
-      if (!isResizing || !container) return
-      const containerWidth = container.offsetWidth
-      const newWidth = Math.max(
-        200,
-        Math.min(containerWidth - 200, startWidth + e.clientX - startX)
-      )
-      const percentage = (newWidth / containerWidth) * 100
-      editorPane.style.width = `${percentage}%`
-      state.editorWidth = percentage
-    })
-
-    document.addEventListener('mouseup', () => {
-      if (isResizing) {
-        isResizing = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    })
-  }
 }
 
-function setupEditorListeners(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+function setupCodeMirrorEditor(): void {
+  const container = document.getElementById('codemirror-editor')
+  if (!container) return
 
-  // Track cursor position
-  editor.addEventListener('keyup', updateCursorPosition)
-  editor.addEventListener('click', updateCursorPosition)
-
-  // Auto-preview on Enter
-  editor.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      // Show preview when pressing Enter
-      const preview = document.getElementById('preview')
-      if (preview && preview.classList.contains('hidden')) {
-        preview.classList.remove('hidden')
-        state.isPreviewVisible = true
-      }
-      // Update preview after a short delay to get new content
-      setTimeout(updatePreview, 50)
-    }
-  })
-
-  // Update preview on input
-  editor.addEventListener('input', debounce(updatePreview, 300))
+  // Create CodeMirror editor
+  cmEditor = createCodeMirrorEditor(
+    container,
+    '',
+    debounce(() => {
+      updateCursorPosition()
+    }, 300)
+  )
 }
 
 function updateCursorPosition(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  const cursorPosition = editor.selectionStart
-  const textBeforeCursor = editor.value.substring(0, cursorPosition)
-  const lines = textBeforeCursor.split('\n')
-
-  state.line = lines.length
-  state.column = lines[lines.length - 1].length + 1
+  const pos = getCursorPosition(cmEditor)
+  state.line = pos.line
+  state.column = pos.column
 
   const statusLine = document.getElementById('status-line')
   if (statusLine) {
@@ -298,51 +319,142 @@ async function loadFileTree(folderPath: string): Promise<void> {
   if (!window.electronAPI?.readDirectory) return
 
   const result = await window.electronAPI.readDirectory(folderPath)
-  if (result.success) {
-    const fileTree = document.getElementById('file-tree')
-    if (fileTree) {
-      fileTree.innerHTML = renderFileTree(result.entries, folderPath)
-      setupFileTreeListeners()
-    }
+  if (result.success && result.entries) {
+    state.fileTree.rootPath = folderPath
+    state.fileTree.nodes = result.entries.map((entry: any) => ({
+      name: entry.name,
+      path: entry.path,
+      type: entry.type,
+      extension: entry.extension,
+      size: entry.size,
+      children: undefined,
+      isExpanded: false,
+    }))
+
+    updateBreadcrumb(folderPath)
+    updateFileCount()
+    renderFileTreeUI()
   }
 }
 
-function renderFileTree(entries: any[], _basePath: string): string {
-  const filtered = entries.filter(entry => {
-    if (entry.type === 'directory') return true
-    return entry.name.endsWith('.md') || entry.name.endsWith('.markdown')
-  })
+function updateBreadcrumb(folderPath: string): void {
+  const breadcrumb = document.getElementById('breadcrumb')
+  if (!breadcrumb) return
 
-  filtered.sort((a, b) => {
+  const parts = folderPath.split(/[/\\]/).filter(Boolean)
+  const folderName = parts.pop() || folderPath
+  breadcrumb.innerHTML = `<span class="breadcrumb-item">${folderName}</span>`
+}
+
+function updateFileCount(): void {
+  const fileCountEl = document.getElementById('file-count')
+  if (!fileCountEl) return
+
+  const files = state.fileTree.nodes.filter(n => n.type === 'file').length
+  const folders = state.fileTree.nodes.filter(n => n.type === 'directory').length
+  state.fileTree.fileCount = files
+  state.fileTree.folderCount = folders
+
+  fileCountEl.textContent = `${files} files, ${folders} folders`
+}
+
+function renderFileTreeUI(): void {
+  const fileTree = document.getElementById('file-tree')
+  if (!fileTree) return
+
+  const filtered = filterNodes(state.fileTree.nodes)
+
+  if (filtered.length === 0 && state.fileTree.rootPath) {
+    fileTree.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-text">No markdown files found</div>
+      </div>
+    `
+    return
+  }
+
+  fileTree.innerHTML = renderTreeNodes(filtered, 0)
+  setupFileTreeListeners()
+}
+
+function filterNodes(nodes: TreeNode[]): TreeNode[] {
+  const filter = state.fileTree.filterText.toLowerCase()
+
+  return nodes.filter(node => {
+    // Always show directories
+    if (node.type === 'directory') return true
+    // Filter markdown files
+    if (!filter) {
+      return node.name.endsWith('.md') || node.name.endsWith('.markdown')
+    }
+    return node.name.toLowerCase().includes(filter)
+  })
+}
+
+function renderTreeNodes(nodes: TreeNode[], depth: number): string {
+  const sorted = [...nodes].sort((a, b) => {
     if (a.type === b.type) return a.name.localeCompare(b.name)
     return a.type === 'directory' ? -1 : 1
   })
 
-  return filtered
-    .map(entry => {
-      const isExpanded = state.expandedFolders.has(entry.path)
-      if (entry.type === 'directory') {
+  return sorted
+    .map(node => {
+      const isExpanded = state.fileTree.expandedPaths.has(node.path)
+      const isSelected = state.fileTree.selectedPath === node.path
+      const paddingLeft = 12 + depth * 12
+
+      if (node.type === 'directory') {
         return `
-        <div class="tree-item tree-folder">
-          <div class="tree-item-content" data-path="${entry.path}" data-type="directory">
-            <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
-            <span class="tree-label">${entry.name}</span>
+          <div class="tree-item tree-folder" style="padding-left: ${paddingLeft}px">
+            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+                 data-path="${node.path}" 
+                 data-type="directory"
+                 style="padding-left: 0">
+              <span class="tree-toggle">${isExpanded ? '▼' : '▶'}</span>
+              <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
+              <span class="tree-label">${escapeHtml(node.name)}</span>
+            </div>
+            <div class="tree-children" 
+                 id="folder-${encodePath(node.path)}" 
+                 style="display: ${isExpanded ? 'block' : 'none'}">
+            </div>
           </div>
-          <div class="tree-children" id="folder-${encodePath(entry.path)}" style="display: ${isExpanded ? 'block' : 'none'}"></div>
-        </div>
-      `
+        `
       } else {
+        const icon = getFileIcon(node.name)
         return `
-        <div class="tree-item tree-file">
-          <div class="tree-item-content" data-path="${entry.path}" data-type="file">
-            <span class="tree-icon">📝</span>
-            <span class="tree-label">${entry.name}</span>
+          <div class="tree-item tree-file" style="padding-left: ${paddingLeft}px">
+            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+                 data-path="${node.path}" 
+                 data-type="file"
+                 style="padding-left: 0">
+              <span class="tree-toggle" style="visibility: hidden">▶</span>
+              <span class="tree-icon">${icon}</span>
+              <span class="tree-label">${escapeHtml(node.name)}</span>
+            </div>
           </div>
-        </div>
-      `
+        `
       }
     })
     .join('')
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function getFileIcon(filename: string): string {
+  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return '📝'
+  if (filename.endsWith('.json')) return '📋'
+  if (filename.endsWith('.js') || filename.endsWith('.ts')) return '💻'
+  if (filename.endsWith('.css') || filename.endsWith('.scss')) return '🎨'
+  if (filename.endsWith('.html')) return '🌐'
+  if (filename.endsWith('.txt')) return '📄'
+  if (filename.endsWith('.yml') || filename.endsWith('.yaml')) return '⚙️'
+  if (filename.endsWith('.gitignore')) return '🔒'
+  return '📄'
 }
 
 function encodePath(path: string): string {
@@ -350,6 +462,7 @@ function encodePath(path: string): string {
 }
 
 function setupFileTreeListeners(): void {
+  // Tree item clicks
   document.querySelectorAll('.tree-item-content').forEach(item => {
     item.addEventListener('click', async e => {
       const target = e.currentTarget as HTMLElement
@@ -358,33 +471,62 @@ function setupFileTreeListeners(): void {
 
       if (!path) return
 
+      // Update selection
+      document.querySelectorAll('.tree-item-content').forEach(el => {
+        el.classList.remove('active')
+      })
+      target.classList.add('active')
+      state.fileTree.selectedPath = path
+
       if (type === 'directory') {
+        e.stopPropagation()
         toggleFolder(path)
       } else {
         openFileInEditor(path)
       }
     })
   })
+
+  // Search input
+  const searchInput = document.getElementById('tree-search') as HTMLInputElement
+  if (searchInput) {
+    searchInput.addEventListener(
+      'input',
+      debounce(() => {
+        state.fileTree.filterText = searchInput.value
+        renderFileTreeUI()
+      }, 150)
+    )
+  }
+
+  // Collapse all button
+  document.getElementById('collapse-all-btn')?.addEventListener('click', () => {
+    state.fileTree.expandedPaths.clear()
+    renderFileTreeUI()
+  })
 }
 
 async function toggleFolder(folderPath: string): Promise<void> {
-  const isExpanded = state.expandedFolders.has(folderPath)
+  const isExpanded = state.fileTree.expandedPaths.has(folderPath)
   const childrenContainer = document.getElementById(`folder-${encodePath(folderPath)}`)
-  const icon = document.querySelector(`[data-path="${folderPath}"] .tree-icon`)
+  const toggleIcon = document.querySelector(`[data-path="${folderPath}"] .tree-toggle`)
+  const folderIcon = document.querySelector(`[data-path="${folderPath}"] .tree-icon`)
 
   if (isExpanded) {
-    state.expandedFolders.delete(folderPath)
+    state.fileTree.expandedPaths.delete(folderPath)
     if (childrenContainer) childrenContainer.style.display = 'none'
-    if (icon) icon.textContent = '📁'
+    if (toggleIcon) toggleIcon.textContent = '▶'
+    if (folderIcon) folderIcon.textContent = '📁'
   } else {
-    state.expandedFolders.add(folderPath)
+    state.fileTree.expandedPaths.add(folderPath)
     if (childrenContainer) {
       if (!childrenContainer.innerHTML) {
         await loadFolderContents(folderPath, childrenContainer)
       }
       childrenContainer.style.display = 'block'
     }
-    if (icon) icon.textContent = '📂'
+    if (toggleIcon) toggleIcon.textContent = '▼'
+    if (folderIcon) folderIcon.textContent = '📂'
   }
 }
 
@@ -392,8 +534,15 @@ async function loadFolderContents(folderPath: string, container: HTMLElement): P
   if (!window.electronAPI?.readDirectory) return
 
   const result = await window.electronAPI.readDirectory(folderPath)
-  if (result.success) {
-    container.innerHTML = renderFileTree(result.entries, folderPath)
+  if (result.success && result.entries) {
+    const nodes: TreeNode[] = result.entries.map((entry: any) => ({
+      name: entry.name,
+      path: entry.path,
+      type: entry.type,
+      extension: entry.extension,
+      size: entry.size,
+    }))
+    container.innerHTML = renderTreeNodes(nodes, 1)
     setupFileTreeListeners()
   }
 }
@@ -415,10 +564,9 @@ async function openFileInEditor(filePath: string): Promise<void> {
   if (!window.electronAPI?.readFile) return
 
   const result = await window.electronAPI.readFile(filePath)
-  if (result.success) {
-    const editor = document.getElementById('editor') as HTMLTextAreaElement
-    if (editor) {
-      editor.value = result.content
+  if (result.success && result.content !== undefined) {
+    if (cmEditor) {
+      setEditorContent(cmEditor, result.content)
       state.currentFile = filePath
 
       // Update status
@@ -436,9 +584,6 @@ async function openFileInEditor(filePath: string): Promise<void> {
       if (activeItem) {
         activeItem.classList.add('active')
       }
-
-      // Update preview
-      updatePreview()
     }
   }
 }
@@ -450,10 +595,10 @@ async function saveCurrentFile(): Promise<void> {
     return
   }
 
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  const result = await window.electronAPI.writeFile(state.currentFile, editor.value)
+  const content = getEditorContent(cmEditor)
+  const result = await window.electronAPI.writeFile(state.currentFile, content)
   if (result.success) {
     showNotification('File saved successfully', 'success')
     updateGitStatus(state.currentFolder || '')
@@ -470,10 +615,10 @@ async function saveAsNewFile(): Promise<void> {
   })
 
   if (!result.canceled && result.filePath) {
-    const editor = document.getElementById('editor') as HTMLTextAreaElement
-    if (!editor) return
+    if (!cmEditor) return
 
-    const writeResult = await window.electronAPI.writeFile(result.filePath, editor.value)
+    const content = getEditorContent(cmEditor)
+    const writeResult = await window.electronAPI.writeFile(result.filePath, content)
     if (writeResult.success) {
       state.currentFile = result.filePath
       const statusFile = document.getElementById('status-file')
@@ -487,56 +632,16 @@ async function saveAsNewFile(): Promise<void> {
   }
 }
 
-function updatePreview(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  const previewContent = document.getElementById('preview-content')
-  if (!editor || !previewContent) return
-
-  const content = editor.value
-  // Simple markdown to HTML conversion (basic)
-  const html = simpleMarkdownToHtml(content)
-  previewContent.innerHTML = html
-}
-
-function simpleMarkdownToHtml(markdown: string): string {
-  let html = markdown
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold and Italic
-    .replace(/\*\*\*(.*?)\*\*\*/gim, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-    // Code
-    .replace(/`([^`]+)`/gim, '<code>$1</code>')
-    // Code blocks
-    .replace(/```([^`]*?)```/gims, '<pre><code>$1</code></pre>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
-    // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1" />')
-    // Blockquotes
-    .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
-    // Lists
-    .replace(/^- (.*$)/gim, '<li>$1</li>')
-    // Line breaks
-    .replace(/\n/gim, '<br>')
-
-  return html
-}
-
 function formatMarkdown(): void {
-  const editor = document.getElementById('editor') as HTMLTextAreaElement
-  if (!editor) return
+  if (!cmEditor) return
 
-  let content = editor.value
+  let content = getEditorContent(cmEditor)
   // Add spaces after headers
   content = content.replace(/^(#{1,6})([^ #])/gim, '$1 $2')
   // Ensure blank line before headers
   content = content.replace(/([^\n])\n(#{1,6})/gim, '$1\n\n$2')
 
-  editor.value = content
+  setEditorContent(cmEditor, content)
   showNotification('Markdown formatted', 'success')
 }
 
@@ -567,20 +672,4 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
       notification.remove()
     }, 300)
   }, 3000)
-}
-
-function handleWindowControl(action: string | undefined): void {
-  if (!action || !window.electronAPI) return
-
-  switch (action) {
-    case 'minimize':
-      window.electronAPI.minimizeWindow?.()
-      break
-    case 'maximize':
-      window.electronAPI.toggleMaximize?.()
-      break
-    case 'close':
-      window.electronAPI.closeWindow?.()
-      break
-  }
 }
