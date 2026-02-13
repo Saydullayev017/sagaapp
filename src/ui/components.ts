@@ -5,6 +5,7 @@ import {
   setEditorContent,
   getCursorPosition,
 } from '../editor/codemirror'
+import { parseMarkdown } from '../editor/markdown-parser'
 
 // Types for file tree
 interface TreeNode {
@@ -34,7 +35,7 @@ interface UIState {
   expandedFolders: Set<string>
   sidebarWidth: number
   editorWidth: number
-  isPreviewVisible: boolean
+
   line: number
   column: number
   fileTree: FileTreeState
@@ -46,7 +47,7 @@ const state: UIState = {
   expandedFolders: new Set(),
   sidebarWidth: 280,
   editorWidth: 50,
-  isPreviewVisible: false,
+
   line: 1,
   column: 1,
   fileTree: {
@@ -109,22 +110,20 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
           </div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="preview-toggle">👁️ Preview</button>
+            <div class="view-mode-toggle">
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">✏️ Edit</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
+            </div>
           </div>
         </div>
         
-        <div class="split-container" id="split-container">
-          <div class="editor-pane" id="editor-pane" style="width: ${state.editorWidth}%">
+        <div class="editor-content-wrapper" id="editor-content-wrapper">
+          <div class="editor-pane" id="editor-pane">
             <div class="codemirror-container" id="codemirror-editor"></div>
           </div>
           
-          <!-- Resize Handle for Editor/Preview -->
-          <div class="resize-handle resize-handle-split" id="resize-split"></div>
-          
-          <div class="preview-pane ${state.isPreviewVisible ? '' : 'hidden'}" id="preview">
-            <div class="preview-content" id="preview-content">
-              <div class="preview-placeholder">Preview will appear here when you press Enter on markdown lines</div>
-            </div>
+          <div class="preview-pane hidden" id="preview-pane">
+            <div class="preview-content" id="preview-content"></div>
           </div>
         </div>
       </main>
@@ -162,16 +161,6 @@ function setupEventListeners(): void {
     saveCurrentFile()
   })
 
-  // Переключение превью
-  document.getElementById('preview-toggle')?.addEventListener('click', () => {
-    const preview = document.getElementById('preview')
-    if (preview) {
-      preview.classList.toggle('hidden')
-      state.isPreviewVisible = !preview.classList.contains('hidden')
-      updatePreview()
-    }
-  })
-
   // Обновление файлов
   document.getElementById('refresh-files')?.addEventListener('click', () => {
     console.log('Refresh files clicked')
@@ -192,14 +181,58 @@ function setupEventListeners(): void {
     console.log('Format clicked')
     formatMarkdown()
   })
+
+  // Переключение режимов отображения (Edit / Preview)
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const mode = target.dataset.mode
+
+      if (mode) {
+        toggleEditorMode(mode)
+
+        // Обновляем активное состояние кнопок
+        document.querySelectorAll('.view-mode-btn').forEach(b => {
+          b.classList.remove('active')
+        })
+        target.classList.add('active')
+
+        showNotification(`Switched to ${mode} mode`, 'info')
+      }
+    })
+  })
+}
+
+// Переключение между режимами Edit и Preview
+function toggleEditorMode(mode: string): void {
+  const editorPane = document.getElementById('editor-pane')
+  const previewPane = document.getElementById('preview-pane')
+
+  if (!editorPane || !previewPane) return
+
+  if (mode === 'edit') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.add('hidden')
+  } else if (mode === 'preview') {
+    editorPane.classList.add('hidden')
+    previewPane.classList.remove('hidden')
+    updatePreview()
+  }
+}
+
+// Обновление preview
+async function updatePreview(): Promise<void> {
+  const previewContent = document.getElementById('preview-content')
+  if (!cmEditor || !previewContent) return
+
+  const content = getEditorContent(cmEditor)
+  const html = await parseMarkdown(content)
+  previewContent.innerHTML = html
 }
 
 function setupResizeHandles(): void {
   const sidebarHandle = document.getElementById('resize-sidebar')
-  const splitHandle = document.getElementById('resize-split')
   const sidebar = document.getElementById('sidebar')
-  const editorPane = document.getElementById('editor-pane')
-  const container = document.getElementById('split-container')
 
   // Sidebar resize
   if (sidebarHandle && sidebar) {
@@ -230,42 +263,6 @@ function setupResizeHandles(): void {
       }
     })
   }
-
-  // Split pane resize
-  if (splitHandle && editorPane && container) {
-    let isResizing = false
-    let startX = 0
-    let startWidth = 0
-
-    splitHandle.addEventListener('mousedown', e => {
-      if (!state.isPreviewVisible) return
-      isResizing = true
-      startX = e.clientX
-      startWidth = editorPane.offsetWidth
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    })
-
-    document.addEventListener('mousemove', e => {
-      if (!isResizing || !container) return
-      const containerWidth = container.offsetWidth
-      const newWidth = Math.max(
-        200,
-        Math.min(containerWidth - 200, startWidth + e.clientX - startX)
-      )
-      const percentage = (newWidth / containerWidth) * 100
-      editorPane.style.width = `${percentage}%`
-      state.editorWidth = percentage
-    })
-
-    document.addEventListener('mouseup', () => {
-      if (isResizing) {
-        isResizing = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    })
-  }
 }
 
 function setupCodeMirrorEditor(): void {
@@ -277,13 +274,9 @@ function setupCodeMirrorEditor(): void {
     container,
     '',
     debounce(() => {
-      updatePreview()
       updateCursorPosition()
     }, 300)
   )
-
-  // Auto-preview on initial load
-  updatePreview()
 }
 
 function updateCursorPosition(): void {
@@ -591,9 +584,6 @@ async function openFileInEditor(filePath: string): Promise<void> {
       if (activeItem) {
         activeItem.classList.add('active')
       }
-
-      // Update preview
-      updatePreview()
     }
   }
 }
@@ -640,44 +630,6 @@ async function saveAsNewFile(): Promise<void> {
       showNotification('File saved successfully', 'success')
     }
   }
-}
-
-function updatePreview(): void {
-  const previewContent = document.getElementById('preview-content')
-  if (!cmEditor || !previewContent) return
-
-  const content = getEditorContent(cmEditor)
-  // Simple markdown to HTML conversion (basic)
-  const html = simpleMarkdownToHtml(content)
-  previewContent.innerHTML = html
-}
-
-function simpleMarkdownToHtml(markdown: string): string {
-  let html = markdown
-    // Headers
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // Bold and Italic
-    .replace(/\*\*\*(.*?)\*\*\*/gim, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/gim, '<em>$1</em>')
-    // Code
-    .replace(/`([^`]+)`/gim, '<code>$1</code>')
-    // Code blocks
-    .replace(/```([^`]*?)```/gims, '<pre><code>$1</code></pre>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
-    // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/gim, '<img src="$2" alt="$1" />')
-    // Blockquotes
-    .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
-    // Lists
-    .replace(/^- (.*$)/gim, '<li>$1</li>')
-    // Line breaks
-    .replace(/\n/gim, '<br>')
-
-  return html
 }
 
 function formatMarkdown(): void {
