@@ -111,6 +111,7 @@ export function initializeUI(): void {
             <button class="toolbar-btn" id="save-btn">💾 Save</button>
             <button class="toolbar-btn" id="format-btn">✨ Format</button>
             <button class="toolbar-btn" id="open-file-btn">📂 Open File</button>
+            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">🔍 Search</button>
           </div>
           <div class="toolbar-right">
             <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">🌙</button>
@@ -119,6 +120,22 @@ export function initializeUI(): void {
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">👁️ Preview</button>
             </div>
           </div>
+        </div>
+        
+        <!-- Search Panel -->
+        <div class="search-panel hidden" id="search-panel">
+          <div class="search-row">
+            <input type="text" id="search-input" placeholder="Search..." />
+            <input type="text" id="replace-input" placeholder="Replace..." />
+          </div>
+          <div class="search-actions">
+            <button class="search-action-btn" id="search-prev">↑ Prev</button>
+            <button class="search-action-btn" id="search-next">↓ Next</button>
+            <button class="search-action-btn" id="replace-btn">Replace</button>
+            <button class="search-action-btn" id="replace-all-btn">Replace All</button>
+            <button class="search-action-btn" id="close-search">✕</button>
+          </div>
+          <div class="search-results" id="search-results"></div>
         </div>
         
         <div class="editor-content-wrapper" id="editor-content-wrapper">
@@ -229,6 +246,145 @@ function setupEventListeners(): void {
       }
     })
   })
+
+  // Search panel
+  document.getElementById('search-btn')?.addEventListener('click', toggleSearchPanel)
+  document.getElementById('close-search')?.addEventListener('click', closeSearchPanel)
+  document.getElementById('search-next')?.addEventListener('click', () => performSearch('next'))
+  document.getElementById('search-prev')?.addEventListener('click', () => performSearch('prev'))
+  document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
+  document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault()
+      toggleSearchPanel()
+    }
+  })
+}
+
+// Search functionality
+let searchQuery = ''
+let searchResults: { from: number; to: number }[] = []
+let currentResultIndex = -1
+
+function toggleSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  if (panel?.classList.contains('hidden')) {
+    panel.classList.remove('hidden')
+    document.getElementById('search-input')?.focus()
+  } else {
+    closeSearchPanel()
+  }
+}
+
+function closeSearchPanel(): void {
+  const panel = document.getElementById('search-panel')
+  panel?.classList.add('hidden')
+  searchQuery = ''
+  searchResults = []
+  currentResultIndex = -1
+}
+
+function performSearch(direction: 'next' | 'prev'): void {
+  const searchInput = document.getElementById('search-input') as HTMLInputElement
+  const query = searchInput?.value
+
+  if (!query || !cmEditor) return
+
+  if (query !== searchQuery) {
+    searchQuery = query
+    searchResults = findAllMatches(query)
+    currentResultIndex = searchResults.length > 0 ? 0 : -1
+  }
+
+  if (searchResults.length === 0) {
+    updateSearchResults('No results')
+    return
+  }
+
+  if (direction === 'next') {
+    currentResultIndex = (currentResultIndex + 1) % searchResults.length
+  } else {
+    currentResultIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length
+  }
+
+  highlightMatch(searchResults[currentResultIndex])
+  updateSearchResults(`${currentResultIndex + 1} of ${searchResults.length}`)
+}
+
+function findAllMatches(query: string): { from: number; to: number }[] {
+  if (!cmEditor) return []
+
+  const content = cmEditor.state.doc.toString()
+  const results: { from: number; to: number }[] = []
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    results.push({ from: match.index, to: match.index + match[0].length })
+  }
+
+  return results
+}
+
+function highlightMatch(match: { from: number; to: number }): void {
+  if (!cmEditor) return
+
+  cmEditor.dispatch({
+    selection: { anchor: match.from, head: match.to },
+    scrollIntoView: true,
+  })
+  cmEditor.focus()
+}
+
+function replaceCurrent(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (currentResultIndex >= 0 && searchResults[currentResultIndex] && cmEditor) {
+    const match = searchResults[currentResultIndex]
+    cmEditor.dispatch({
+      changes: { from: match.from, to: match.to, insert: replacement },
+    })
+    searchResults = findAllMatches(searchQuery)
+    if (currentResultIndex >= searchResults.length) {
+      currentResultIndex = Math.max(0, searchResults.length - 1)
+    }
+    if (searchResults.length > 0) {
+      highlightMatch(searchResults[currentResultIndex])
+    }
+    updateSearchResults(`${searchResults.length} results`)
+  }
+}
+
+function replaceAll(): void {
+  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
+  const replacement = replaceInput?.value || ''
+
+  if (!cmEditor || !searchQuery) return
+
+  const content = cmEditor.state.doc.toString()
+  const newContent = content.replace(
+    new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+    replacement
+  )
+
+  cmEditor.dispatch({
+    changes: { from: 0, to: cmEditor.state.doc.length, insert: newContent },
+  })
+
+  searchResults = []
+  currentResultIndex = -1
+  updateSearchResults('All replaced')
+}
+
+function updateSearchResults(text: string): void {
+  const resultsEl = document.getElementById('search-results')
+  if (resultsEl) {
+    resultsEl.textContent = text
+  }
 }
 
 // Переключение между режимами Edit и Preview

@@ -1,8 +1,9 @@
-import { EditorView, keymap, ViewPlugin, ViewUpdate } from '@codemirror/view'
+import { EditorView, keymap as cmKeymap, ViewPlugin, ViewUpdate } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 
 // Type for the onChange callback
 export type EditorChangeCallback = (content: string) => void
@@ -121,10 +122,13 @@ export function createCodeMirrorEditor(
       extensions: [
         // Basic setup
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        cmKeymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
 
         // Language support
         markdown(),
+
+        // Search
+        highlightSelectionMatches(),
 
         // Theme
         oneDark,
