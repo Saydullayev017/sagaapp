@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import * as pty from 'node-pty'
 
 const execAsync = promisify(exec)
 
@@ -23,6 +24,17 @@ const getSenderWindow = (
   event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
 ): BrowserWindow | null => {
   return BrowserWindow.fromWebContents(event.sender)
+}
+
+// Map to store active PTY sessions
+const ptySessions = new Map<string, pty.IPty>()
+
+// Get shell based on platform
+const getShell = (): string => {
+  if (process.platform === 'win32') {
+    return process.env.COMSPEC || 'cmd.exe'
+  }
+  return process.env.SHELL || '/bin/bash'
 }
 
 export const registerIpcHandlers = () => {
@@ -245,6 +257,26 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  ipcMain.handle('git-add', async (_event, cwd: string, files: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(`git add ${files}`, { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-reset', async (_event, cwd: string, files: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(`git reset HEAD ${files}`, { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // File/Folder creation
+
   // File/Folder creation
   ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
     try {
@@ -273,6 +305,87 @@ export const registerIpcHandlers = () => {
         await fs.rm(itemPath, { recursive: true })
       } else {
         await fs.unlink(itemPath)
+      }
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('execute-command', async (_event, cwd: string, command: string) => {
+    try {
+      const { exec } = require('child_process')
+      return new Promise(resolve => {
+        exec(command, { cwd }, (error: any, stdout: string, stderr: string) => {
+          if (error) {
+            resolve({ success: false, error: error.message, output: stderr || stdout })
+          } else {
+            resolve({ success: true, output: stdout || stderr })
+          }
+        })
+      })
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Terminal PTY handlers
+  ipcMain.handle('terminal-create', async (event, id: string, cwd?: string) => {
+    try {
+      const shell = getShell()
+      const workingDir = cwd || process.env.HOME || '/'
+
+      const ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        cwd: workingDir,
+        env: process.env as { [key: string]: string },
+      })
+
+      ptySessions.set(id, ptyProcess)
+
+      ptyProcess.onData(data => {
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('terminal-data', id, data)
+        }
+      })
+
+      ptyProcess.onExit(({ exitCode }) => {
+        ptySessions.delete(id)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('terminal-exit', id, exitCode)
+        }
+      })
+
+      return { success: true, pid: ptyProcess.pid }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.on('terminal-input', (_event, id: string, data: string) => {
+    const ptyProcess = ptySessions.get(id)
+    if (ptyProcess) {
+      ptyProcess.write(data)
+    }
+  })
+
+  ipcMain.on('terminal-resize', (_event, id: string, cols: number, rows: number) => {
+    const ptyProcess = ptySessions.get(id)
+    if (ptyProcess) {
+      ptyProcess.resize(cols, rows)
+    }
+  })
+
+  ipcMain.handle('terminal-kill', async (_event, id: string) => {
+    try {
+      const ptyProcess = ptySessions.get(id)
+      if (ptyProcess) {
+        ptyProcess.kill()
+        ptySessions.delete(id)
       }
       return { success: true }
     } catch (error: any) {

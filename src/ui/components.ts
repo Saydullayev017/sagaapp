@@ -1,4 +1,6 @@
 import { EditorView } from '@codemirror/view'
+import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
 import {
   createCodeMirrorEditor,
   getEditorContent,
@@ -39,6 +41,10 @@ interface UIState {
   line: number
   column: number
   fileTree: FileTreeState
+  activeTerminal: number
+  terminalCount: number
+  terminals: { [key: string]: { terminal: Terminal; fitAddon: FitAddon } }
+  terminalHeight: number
 }
 
 const state: UIState = {
@@ -59,17 +65,54 @@ const state: UIState = {
     fileCount: 0,
     folderCount: 0,
   },
+
+  activeTerminal: 1,
+  terminalCount: 1,
+  terminals: {},
+  terminalHeight: 250,
 }
 
 // CodeMirror editor instance
 let cmEditor: EditorView | null = null
+
+// Auto-save timeout
+let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null
+const AUTO_SAVE_DELAY = 2000
+
+// Storage keys
+const STORAGE_KEY = 'japp-state'
 
 export function initializeUI(): void {
   const app = document.getElementById('app')
   if (!app) return
 
   app.innerHTML = `
-    <div class="titlebar-drag-area"></div>
+    <!-- Custom Titlebar -->
+    <div class="custom-titlebar" id="custom-titlebar">
+      <div class="titlebar-title">
+        <svg class="titlebar-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z"/>
+        </svg>
+        <span>Japp - Markdown Editor</span>
+      </div>
+      <div class="titlebar-controls">
+        <button class="titlebar-btn" id="titlebar-minimize" title="Minimize">
+          <svg viewBox="0 0 10 10" fill="currentColor">
+            <rect x="0" y="4.5" width="10" height="1"/>
+          </svg>
+        </button>
+        <button class="titlebar-btn" id="titlebar-maximize" title="Maximize">
+          <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="0.5" y="0.5" width="9" height="9"/>
+          </svg>
+        </button>
+        <button class="titlebar-btn close" id="titlebar-close" title="Close">
+          <svg viewBox="0 0 10 10" fill="currentColor">
+            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
     
     <div class="main-layout">
       <!-- Left Panel: Sidebar -->
@@ -79,22 +122,12 @@ export function initializeUI(): void {
             <h3>Explorer</h3>
             <span class="file-count" id="file-count"></span>
           </div>
-          <div class="sidebar-actions">
-            <button class="icon-button" id="open-folder-btn" title="Open Folder">Open</button>
-            <button class="icon-button" id="refresh-files" title="Refresh">Refresh</button>
-            <button class="icon-button" id="collapse-all-btn" title="Collapse All">Collapse</button>
-          </div>
         </div>
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="file-tree-search">
           <input type="text" id="tree-search" placeholder="Search files..." />
         </div>
-        <div class="file-tree" id="file-tree">
-          <div class="empty-state">
-            <div class="empty-text">No folder opened</div>
-            <button class="open-folder-btn" id="empty-open-folder">Open Folder</button>
-          </div>
-        </div>
+        <div class="file-tree" id="file-tree"></div>
       </aside>
       
       <!-- Resize Handle for Sidebar -->
@@ -103,21 +136,9 @@ export function initializeUI(): void {
       <!-- Center Panel: Editor -->
       <main class="editor-container">
         <div class="editor-toolbar">
-          <div class="toolbar-left">
-            <button class="toolbar-btn" id="save-btn">Save</button>
-            <button class="toolbar-btn" id="format-btn">Format</button>
-            <button class="toolbar-btn" id="open-file-btn">Open</button>
-            <button class="toolbar-btn" id="search-btn" title="Search (Ctrl+F)">Search</button>
-            <button class="toolbar-btn" id="new-file-btn" title="New File">New File</button>
-            <button class="toolbar-btn" id="new-folder-btn" title="New Folder">New Folder</button>
-          </div>
-          <div class="toolbar-center">
-            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">Commit</button>
-            <button class="toolbar-btn git-btn" id="git-push" title="Push">Push</button>
-            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
-          </div>
+          <div class="toolbar-left"></div>
+          <div class="toolbar-center"></div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="theme-toggle" title="Toggle Theme">Theme</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -132,6 +153,20 @@ export function initializeUI(): void {
           
           <div class="preview-pane hidden" id="preview-pane">
             <div class="preview-content" id="preview-content"></div>
+          </div>
+          </div>
+
+        <!-- Bottom Panel: Terminal -->
+        <div class="terminal-resize-handle" id="terminal-resize"></div>
+        <div class="bottom-panel" id="bottom-panel">
+          <div class="terminal-tabs">
+            <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+            <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+          </div>
+          <div class="terminal-panels">
+            <div class="terminal-panel active" data-terminal="1">
+              <div class="terminal-container" id="terminal-container-1"></div>
+            </div>
           </div>
         </div>
       </main>
@@ -156,30 +191,64 @@ export function initializeUI(): void {
     </footer>
   `
 
+  // Загружаем тему
+  loadTheme()
+
   // Добавляем обработчики событий
   setupEventListeners()
   setupResizeHandles()
   setupCodeMirrorEditor()
+  setupDragDrop()
+  setupPasteHandler()
+  setupBottomPanel()
+  setupTerminal()
+
+  // Восстанавливаем состояние или открываем дефолтную папку
+  setTimeout(async () => {
+    const savedState = localStorage.getItem(STORAGE_KEY)
+    if (savedState) {
+      await restoreState()
+    } else {
+      const defaultPath = '/Volumes/DEV/Japp'
+      state.currentFolder = defaultPath
+      await loadFileTree(defaultPath)
+      updateGitStatus(defaultPath)
+      saveState()
+    }
+  }, 100)
 }
 
 function setupEventListeners(): void {
-  // Кнопка сохранения
-  document.getElementById('save-btn')?.addEventListener('click', () => {
-    console.log('Save clicked')
-    saveCurrentFile()
+  // Titlebar controls
+  document.getElementById('titlebar-minimize')?.addEventListener('click', () => {
+    window.electronAPI?.minimizeWindow()
   })
 
-  // Обновление файлов
-  document.getElementById('refresh-files')?.addEventListener('click', () => {
-    console.log('Refresh files clicked')
-    if (state.currentFolder) {
-      loadFileTree(state.currentFolder)
+  document.getElementById('titlebar-maximize')?.addEventListener('click', () => {
+    window.electronAPI?.toggleMaximize()
+  })
+
+  document.getElementById('titlebar-close')?.addEventListener('click', () => {
+    window.electronAPI?.closeWindow()
+  })
+
+  // Track maximize state
+  window.electronAPI?.onWindowMaximize(isMaximized => {
+    const maxBtn = document.getElementById('titlebar-maximize')
+    if (maxBtn) {
+      maxBtn.innerHTML = isMaximized
+        ? `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="2.5" y="0.5" width="7" height="7"/>
+            <path d="M0.5 2.5h7v7h-7z"/>
+          </svg>`
+        : `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="0.5" y="0.5" width="9" height="9"/>
+          </svg>`
     }
   })
 
-  // Открытие папки
-  document.getElementById('open-folder-btn')?.addEventListener('click', openFolder)
-  document.getElementById('empty-open-folder')?.addEventListener('click', openFolder)
+  // Terminal resize
+  setupTerminalResize()
 
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
@@ -193,14 +262,6 @@ function setupEventListeners(): void {
     console.log('Format clicked')
     formatMarkdown()
   })
-
-  // Search panel
-  document.getElementById('search-btn')?.addEventListener('click', toggleSearchPanel)
-  document.getElementById('close-search')?.addEventListener('click', closeSearchPanel)
-  document.getElementById('search-next')?.addEventListener('click', () => performSearch('next'))
-  document.getElementById('search-prev')?.addEventListener('click', () => performSearch('prev'))
-  document.getElementById('replace-btn')?.addEventListener('click', replaceCurrent)
-  document.getElementById('replace-all-btn')?.addEventListener('click', replaceAll)
 
   // View mode toggle (Edit/Preview)
   document.querySelectorAll('.view-mode-btn').forEach(btn => {
@@ -261,128 +322,6 @@ function setupEventListeners(): void {
 }
 
 // Search functionality
-let searchQuery = ''
-let searchResults: { from: number; to: number }[] = []
-let currentResultIndex = -1
-
-function toggleSearchPanel(): void {
-  const panel = document.getElementById('search-panel')
-  if (panel?.classList.contains('hidden')) {
-    panel.classList.remove('hidden')
-    document.getElementById('search-input')?.focus()
-  } else {
-    closeSearchPanel()
-  }
-}
-
-function closeSearchPanel(): void {
-  const panel = document.getElementById('search-panel')
-  panel?.classList.add('hidden')
-  searchQuery = ''
-  searchResults = []
-  currentResultIndex = -1
-}
-
-function performSearch(direction: 'next' | 'prev'): void {
-  const searchInput = document.getElementById('search-input') as HTMLInputElement
-  const query = searchInput?.value
-
-  if (!query || !cmEditor) return
-
-  if (query !== searchQuery) {
-    searchQuery = query
-    searchResults = findAllMatches(query)
-    currentResultIndex = searchResults.length > 0 ? 0 : -1
-  }
-
-  if (searchResults.length === 0) {
-    updateSearchResults('No results')
-    return
-  }
-
-  if (direction === 'next') {
-    currentResultIndex = (currentResultIndex + 1) % searchResults.length
-  } else {
-    currentResultIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length
-  }
-
-  highlightMatch(searchResults[currentResultIndex])
-  updateSearchResults(`${currentResultIndex + 1} of ${searchResults.length}`)
-}
-
-function findAllMatches(query: string): { from: number; to: number }[] {
-  if (!cmEditor) return []
-
-  const content = cmEditor.state.doc.toString()
-  const results: { from: number; to: number }[] = []
-  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-
-  let match
-  while ((match = regex.exec(content)) !== null) {
-    results.push({ from: match.index, to: match.index + match[0].length })
-  }
-
-  return results
-}
-
-function highlightMatch(match: { from: number; to: number }): void {
-  if (!cmEditor) return
-
-  cmEditor.dispatch({
-    selection: { anchor: match.from, head: match.to },
-    scrollIntoView: true,
-  })
-  cmEditor.focus()
-}
-
-function replaceCurrent(): void {
-  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
-  const replacement = replaceInput?.value || ''
-
-  if (currentResultIndex >= 0 && searchResults[currentResultIndex] && cmEditor) {
-    const match = searchResults[currentResultIndex]
-    cmEditor.dispatch({
-      changes: { from: match.from, to: match.to, insert: replacement },
-    })
-    searchResults = findAllMatches(searchQuery)
-    if (currentResultIndex >= searchResults.length) {
-      currentResultIndex = Math.max(0, searchResults.length - 1)
-    }
-    if (searchResults.length > 0) {
-      highlightMatch(searchResults[currentResultIndex])
-    }
-    updateSearchResults(`${searchResults.length} results`)
-  }
-}
-
-function replaceAll(): void {
-  const replaceInput = document.getElementById('replace-input') as HTMLInputElement
-  const replacement = replaceInput?.value || ''
-
-  if (!cmEditor || !searchQuery) return
-
-  const content = cmEditor.state.doc.toString()
-  const newContent = content.replace(
-    new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
-    replacement
-  )
-
-  cmEditor.dispatch({
-    changes: { from: 0, to: cmEditor.state.doc.length, insert: newContent },
-  })
-
-  searchResults = []
-  currentResultIndex = -1
-  updateSearchResults('All replaced')
-}
-
-function updateSearchResults(text: string): void {
-  const resultsEl = document.getElementById('search-results')
-  if (resultsEl) {
-    resultsEl.textContent = text
-  }
-}
-
 // Git functions
 async function gitCommit(): Promise<void> {
   if (!state.currentFolder) {
@@ -461,6 +400,7 @@ function setupResizeHandles(): void {
         isResizing = false
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
+        saveState()
       }
     })
   }
@@ -470,13 +410,13 @@ function setupCodeMirrorEditor(): void {
   const container = document.getElementById('codemirror-editor')
   if (!container) return
 
-  // Create CodeMirror editor
   cmEditor = createCodeMirrorEditor(
     container,
     '',
     debounce(() => {
       updateCursorPosition()
-    }, 300)
+      scheduleAutoSave()
+    }, 500)
   )
 }
 
@@ -560,21 +500,6 @@ function debounce(func: Function, wait: number): (...args: any[]) => void {
   }
 }
 
-async function openFolder(): Promise<void> {
-  if (!window.electronAPI?.showOpenDialog) return
-
-  const result = await window.electronAPI.showOpenDialog({
-    properties: ['openDirectory'],
-  })
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    const folderPath = result.filePaths[0]
-    state.currentFolder = folderPath
-    loadFileTree(folderPath)
-    updateGitStatus(folderPath)
-  }
-}
-
 async function loadFileTree(folderPath: string): Promise<void> {
   if (!window.electronAPI?.readDirectory) return
 
@@ -594,6 +519,7 @@ async function loadFileTree(folderPath: string): Promise<void> {
     updateBreadcrumb(folderPath)
     updateFileCount()
     renderFileTreeUI()
+    saveState()
   }
 }
 
@@ -746,12 +672,6 @@ function setupFileTreeListeners(): void {
       }, 150)
     )
   }
-
-  // Collapse all button
-  document.getElementById('collapse-all-btn')?.addEventListener('click', () => {
-    state.fileTree.expandedPaths.clear()
-    renderFileTreeUI()
-  })
 }
 
 async function toggleFolder(folderPath: string): Promise<void> {
@@ -804,7 +724,9 @@ async function createNewFile(): Promise<void> {
   const fileName = prompt('Enter file name:', 'untitled.md')
   if (!fileName) return
 
+  console.log('Creating file:', state.currentFolder, fileName)
   const result = await window.electronAPI?.createFile(state.currentFolder, fileName)
+  console.log('Create file result:', result)
   if (result?.success) {
     showNotification('File created', 'success')
     loadFileTree(state.currentFolder)
@@ -822,7 +744,9 @@ async function createNewFolder(): Promise<void> {
   const folderName = prompt('Enter folder name:', 'new-folder')
   if (!folderName) return
 
+  console.log('Creating folder:', state.currentFolder, folderName)
   const result = await window.electronAPI?.createFolder(state.currentFolder, folderName)
+  console.log('Create folder result:', result)
   if (result?.success) {
     showNotification('Folder created', 'success')
     loadFileTree(state.currentFolder)
@@ -868,6 +792,8 @@ async function openFileInEditor(filePath: string): Promise<void> {
       if (activeItem) {
         activeItem.classList.add('active')
       }
+
+      saveState()
     }
   }
 }
@@ -916,6 +842,76 @@ async function saveAsNewFile(): Promise<void> {
   }
 }
 
+function scheduleAutoSave(): void {
+  if (autoSaveTimeout) {
+    clearTimeout(autoSaveTimeout)
+  }
+  autoSaveTimeout = setTimeout(() => {
+    if (state.currentFile && cmEditor) {
+      saveCurrentFile()
+    }
+  }, AUTO_SAVE_DELAY)
+}
+
+function saveState(): void {
+  try {
+    const stateToSave = {
+      currentFolder: state.currentFolder,
+      currentFile: state.currentFile,
+      sidebarWidth: state.sidebarWidth,
+      editorWidth: state.editorWidth,
+      expandedPaths: Array.from(state.fileTree.expandedPaths),
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave))
+  } catch (e) {
+    console.error('Failed to save state:', e)
+  }
+}
+
+function loadState(): void {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return
+
+    const stateToLoad = JSON.parse(saved)
+    if (stateToLoad.currentFolder) {
+      state.currentFolder = stateToLoad.currentFolder
+    }
+    if (stateToLoad.currentFile) {
+      state.currentFile = stateToLoad.currentFile
+    }
+    if (stateToLoad.sidebarWidth) {
+      state.sidebarWidth = stateToLoad.sidebarWidth
+    }
+    if (stateToLoad.editorWidth) {
+      state.editorWidth = stateToLoad.editorWidth
+    }
+    if (stateToLoad.expandedPaths) {
+      state.fileTree.expandedPaths = new Set(stateToLoad.expandedPaths)
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e)
+  }
+}
+
+async function restoreState(): Promise<void> {
+  loadState()
+
+  if (state.currentFolder) {
+    await loadFileTree(state.currentFolder)
+    updateGitStatus(state.currentFolder)
+  }
+
+  if (state.currentFile) {
+    await openFileInEditor(state.currentFile)
+  }
+
+  const sidebar = document.getElementById('sidebar')
+  if (sidebar && state.sidebarWidth) {
+    sidebar.style.width = `${state.sidebarWidth}px`
+  }
+}
+
 function formatMarkdown(): void {
   if (!cmEditor) return
 
@@ -927,6 +923,293 @@ function formatMarkdown(): void {
 
   setEditorContent(cmEditor, content)
   showNotification('Markdown formatted', 'success')
+}
+
+function setupBottomPanel(): void {
+  document.querySelectorAll('.terminal-tab').forEach(tab => {
+    tab.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const terminalId = target.dataset.terminal
+      if (terminalId) {
+        switchTerminal(parseInt(terminalId))
+      }
+    })
+  })
+
+  document.getElementById('terminal-add')?.addEventListener('click', addTerminal)
+}
+
+function switchTerminal(id: number): void {
+  state.activeTerminal = id
+
+  document.querySelectorAll('.terminal-tab').forEach(tab => {
+    tab.classList.toggle('active', (tab as HTMLElement).dataset.terminal === String(id))
+  })
+
+  document.querySelectorAll('.terminal-panel').forEach(panel => {
+    panel.classList.toggle('active', (panel as HTMLElement).dataset.terminal === String(id))
+  })
+
+  const term = state.terminals[String(id)]
+  if (term) {
+    setTimeout(() => {
+      term.fitAddon.fit()
+      window.electronAPI?.terminalResize(String(id), term.terminal.cols, term.terminal.rows)
+    }, 10)
+  }
+}
+
+function addTerminal(): void {
+  state.terminalCount++
+  const id = state.terminalCount
+
+  const tabsContainer = document.querySelector('.terminal-tabs')
+  const addBtn = document.getElementById('terminal-add')
+  const newTab = document.createElement('button')
+  newTab.className = 'terminal-tab active'
+  newTab.dataset.terminal = String(id)
+  newTab.textContent = `Terminal ${id}`
+  newTab.addEventListener('click', () => switchTerminal(id))
+  tabsContainer?.insertBefore(newTab, addBtn)
+
+  const panelsContainer = document.querySelector('.terminal-panels')
+  const newPanel = document.createElement('div')
+  newPanel.className = 'terminal-panel active'
+  newPanel.dataset.terminal = String(id)
+  newPanel.innerHTML = `
+    <div class="terminal-container" id="terminal-container-${id}"></div>
+  `
+  panelsContainer?.appendChild(newPanel)
+
+  document.querySelectorAll('.terminal-panel').forEach(panel => {
+    if (panel !== newPanel) {
+      panel.classList.remove('active')
+    }
+  })
+
+  createTerminal(id)
+  state.activeTerminal = id
+}
+
+async function refreshGitChanges(): Promise<void> {
+  if (!state.currentFolder) return
+
+  try {
+    const statusResult = await window.electronAPI?.gitStatus(state.currentFolder)
+    if (statusResult?.success && statusResult.files) {
+      const staged: string[] = []
+      const unstaged: string[] = []
+
+      statusResult.files.forEach((file: any) => {
+        if (file.staged) {
+          staged.push(file.path)
+        } else {
+          unstaged.push(file.path)
+        }
+      })
+
+      state.gitChanges.staged = staged
+      state.gitChanges.unstaged = unstaged
+
+      renderGitFilesList()
+    }
+  } catch (e) {
+    console.error('Failed to refresh git changes:', e)
+  }
+}
+
+function renderGitFilesList(): void {
+  const container = document.getElementById('git-files-list')
+  if (!container) return
+
+  const allFiles = [
+    ...state.gitChanges.unstaged.map(f => ({ path: f, staged: false })),
+    ...state.gitChanges.staged.map(f => ({ path: f, staged: true })),
+  ]
+
+  if (allFiles.length === 0) {
+    container.innerHTML = '<div class="git-empty">No changes</div>'
+    return
+  }
+
+  container.innerHTML = allFiles
+    .map(
+      file => `
+      <div class="git-file-item ${file.staged ? 'staged' : 'unstaged'}">
+        <span class="git-file-status">${file.staged ? 'S' : 'U'}</span>
+        <span class="git-file-path">${file.path}</span>
+        <button class="git-file-action" data-path="${file.path}" data-action="${file.staged ? 'unstage' : 'stage'}">
+          ${file.staged ? '-' : '+'}
+        </button>
+      </div>
+    `
+    )
+    .join('')
+
+  container.querySelectorAll('.git-file-action').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const target = e.currentTarget as HTMLElement
+      const path = target.dataset.path || ''
+      const action = target.dataset.action || ''
+      if (action === 'stage') {
+        await stageFile(path)
+      } else {
+        await unstageFile(path)
+      }
+    })
+  })
+}
+
+async function stageFile(filePath: string): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitAdd(state.currentFolder, filePath)
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function unstageFile(filePath: string): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitReset(state.currentFolder, filePath)
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function stageAllFiles(): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitAdd(state.currentFolder, '.')
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function unstageAllFiles(): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitReset(state.currentFolder, '.')
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function commitChanges(): Promise<void> {
+  const commitInput = document.getElementById('git-commit-message') as HTMLTextAreaElement
+  const message = commitInput?.value.trim()
+
+  if (!message) {
+    showNotification('Enter commit message', 'error')
+    return
+  }
+
+  if (!state.currentFolder) return
+
+  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+  if (result?.success) {
+    showNotification('Committed successfully', 'success')
+    commitInput.value = ''
+    await refreshGitChanges()
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Commit failed', 'error')
+  }
+}
+
+function setupDragDrop(): void {
+  const editorPane = document.getElementById('editor-pane')
+  if (!editorPane) return
+
+  editorPane.addEventListener('dragover', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.add('drag-over')
+  })
+
+  editorPane.addEventListener('dragleave', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.remove('drag-over')
+  })
+
+  editorPane.addEventListener('drop', async e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.remove('drag-over')
+
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) {
+        await handleImageDrop(file)
+      }
+    }
+  })
+}
+
+async function handleImageDrop(file: File): Promise<void> {
+  if (!state.currentFolder || !cmEditor) {
+    showNotification('Open a folder first', 'error')
+    return
+  }
+
+  try {
+    const assetsPath = `${state.currentFolder}/assets`
+
+    // Ensure assets folder exists
+    await window.electronAPI?.createFolder(assetsPath, '').catch(() => {})
+
+    // Generate unique filename
+    const timestamp = Date.now()
+    const ext = file.name.split('.').pop() || 'png'
+    const fileName = `${timestamp}-${file.name.replace(/\.[^/.]+$/, '')}.${ext}`
+    const fullPath = `${assetsPath}/${fileName}`
+
+    // Read file as base64
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1]
+
+      // Write file
+      const result = await window.electronAPI?.writeFile(fullPath, atob(base64))
+      if (result?.success) {
+        const markdown = `![${file.name}](./assets/${fileName})\n`
+        insertTextAtCursor(markdown)
+        showNotification('Image saved', 'success')
+        loadFileTree(state.currentFolder!)
+      } else {
+        showNotification('Failed to save image', 'error')
+      }
+    }
+    reader.readAsDataURL(file)
+  } catch (e) {
+    console.error('Image drop error:', e)
+    showNotification('Failed to process image', 'error')
+  }
+}
+
+function insertTextAtCursor(text: string): void {
+  if (!cmEditor) return
+
+  const pos = cmEditor.state.selection.main.head
+  cmEditor.dispatch({
+    changes: { from: pos, insert: text },
+    selection: { anchor: pos + text.length },
+  })
+  cmEditor.focus()
+}
+
+function setupPasteHandler(): void {
+  document.addEventListener('paste', async e => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          await handleImageDrop(file)
+        }
+        break
+      }
+    }
+  })
 }
 
 async function updateGitStatus(folderPath: string): Promise<void> {
@@ -947,6 +1230,8 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       <span class="git-branch">${branch}</span>
       <span class="git-changes">${changedCount} changes</span>
     `
+
+    await refreshGitChanges()
   } catch {
     statusGit.innerHTML = `
       <span class="git-branch">Not a git repo</span>
@@ -971,4 +1256,130 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
       notification.remove()
     }, 300)
   }, 3000)
+}
+
+function loadTheme(): void {
+  const savedTheme = localStorage.getItem('japp-theme')
+  if (savedTheme && ['dark', 'light', 'glass'].includes(savedTheme)) {
+    document.documentElement.setAttribute('data-theme', savedTheme)
+  }
+}
+
+function setupTerminal(): void {
+  createTerminal(1)
+
+  window.electronAPI?.onTerminalData((id, data) => {
+    const term = state.terminals[id]
+    if (term) {
+      term.terminal.write(data)
+    }
+  })
+
+  window.electronAPI?.onTerminalExit((id, exitCode) => {
+    const term = state.terminals[id]
+    if (term) {
+      term.terminal.write(`\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`)
+    }
+  })
+
+  window.addEventListener('resize', () => {
+    Object.values(state.terminals).forEach(({ fitAddon }) => {
+      fitAddon.fit()
+    })
+  })
+}
+
+async function createTerminal(id: number): Promise<void> {
+  const container = document.getElementById(`terminal-container-${id}`)
+  if (!container || state.terminals[String(id)]) return
+
+  const terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'SF Mono', Monaco, 'Cascadia Code', monospace",
+    theme: {
+      background: '#1a1a2e',
+      foreground: '#e6e6e6',
+      cursor: '#6c63ff',
+      selectionBackground: 'rgba(108, 99, 255, 0.3)',
+    },
+    scrollback: 10000,
+    allowProposedApi: true,
+  })
+
+  const fitAddon = new FitAddon()
+  terminal.loadAddon(fitAddon)
+
+  terminal.open(container)
+  fitAddon.fit()
+
+  state.terminals[String(id)] = { terminal, fitAddon }
+
+  terminal.onData(data => {
+    window.electronAPI?.terminalInput(String(id), data)
+  })
+
+  const cwd = state.currentFolder || process.env.HOME || '/'
+  await window.electronAPI?.terminalCreate(String(id), cwd)
+
+  setTimeout(() => {
+    fitAddon.fit()
+  }, 100)
+}
+
+function setupTerminalResize(): void {
+  const resizeHandle = document.getElementById('terminal-resize')
+  const bottomPanel = document.getElementById('bottom-panel')
+
+  if (!resizeHandle || !bottomPanel) return
+
+  let isResizing = false
+  let startY = 0
+  let startHeight = 0
+
+  resizeHandle.addEventListener('mousedown', e => {
+    isResizing = true
+    startY = e.clientY
+    startHeight = bottomPanel.offsetHeight
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    resizeHandle.classList.add('resizing')
+  })
+
+  document.addEventListener('mousemove', e => {
+    if (!isResizing) return
+
+    const delta = startY - e.clientY
+    const newHeight = Math.max(100, Math.min(window.innerHeight * 0.8, startHeight + delta))
+
+    bottomPanel.style.height = `${newHeight}px`
+    state.terminalHeight = newHeight
+
+    const activeTerm = state.terminals[String(state.activeTerminal)]
+    if (activeTerm) {
+      activeTerm.fitAddon.fit()
+      const cols = activeTerm.terminal.cols
+      const rows = activeTerm.terminal.rows
+      window.electronAPI?.terminalResize(String(state.activeTerminal), cols, rows)
+    }
+  })
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      resizeHandle.classList.remove('resizing')
+      localStorage.setItem('japp-terminal-height', String(state.terminalHeight))
+    }
+  })
+
+  const savedHeight = localStorage.getItem('japp-terminal-height')
+  if (savedHeight) {
+    const height = parseInt(savedHeight)
+    if (height > 0) {
+      bottomPanel.style.height = `${height}px`
+      state.terminalHeight = height
+    }
+  }
 }

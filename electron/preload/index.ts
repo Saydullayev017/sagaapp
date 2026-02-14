@@ -58,6 +58,18 @@ export interface ElectronAPI {
   gitBranch: (cwd: string) => Promise<{ success: boolean; branch?: string; error?: string }>
   gitPush: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
   gitPull: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitAdd: (
+    cwd: string,
+    files: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitReset: (
+    cwd: string,
+    files: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  executeCommand: (
+    cwd: string,
+    command: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
 
   // File/Folder operations
   createFile: (
@@ -69,6 +81,17 @@ export interface ElectronAPI {
     folderName: string
   ) => Promise<{ success: boolean; path?: string; error?: string }>
   deleteItem: (itemPath: string) => Promise<{ success: boolean; error?: string }>
+
+  // Terminal
+  terminalCreate: (
+    id: string,
+    cwd?: string
+  ) => Promise<{ success: boolean; pid?: number; error?: string }>
+  terminalInput: (id: string, data: string) => void
+  terminalResize: (id: string, cols: number, rows: number) => void
+  terminalKill: (id: string) => Promise<{ success: boolean; error?: string }>
+  onTerminalData: (callback: (id: string, data: string) => void) => void
+  onTerminalExit: (callback: (id: string, exitCode: number) => void) => void
 }
 
 // Безопасный API через contextBridge
@@ -137,6 +160,8 @@ const electronAPI: ElectronAPI = {
   gitBranch: (cwd: string) => ipcRenderer.invoke('git-branch', cwd),
   gitPush: (cwd: string) => ipcRenderer.invoke('git-push', cwd),
   gitPull: (cwd: string) => ipcRenderer.invoke('git-pull', cwd),
+  gitAdd: (cwd: string, files: string) => ipcRenderer.invoke('git-add', cwd, files),
+  gitReset: (cwd: string, files: string) => ipcRenderer.invoke('git-reset', cwd, files),
 
   // File/Folder operations
   createFile: (dirPath: string, fileName: string) =>
@@ -144,6 +169,21 @@ const electronAPI: ElectronAPI = {
   createFolder: (dirPath: string, folderName: string) =>
     ipcRenderer.invoke('create-folder', dirPath, folderName),
   deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
+  executeCommand: (cwd: string, command: string) =>
+    ipcRenderer.invoke('execute-command', cwd, command),
+
+  // Terminal
+  terminalCreate: (id: string, cwd?: string) => ipcRenderer.invoke('terminal-create', id, cwd),
+  terminalInput: (id: string, data: string) => ipcRenderer.send('terminal-input', id, data),
+  terminalResize: (id: string, cols: number, rows: number) =>
+    ipcRenderer.send('terminal-resize', id, cols, rows),
+  terminalKill: (id: string) => ipcRenderer.invoke('terminal-kill', id),
+  onTerminalData: (callback: (id: string, data: string) => void) => {
+    ipcRenderer.on('terminal-data', (_, id, data) => callback(id, data))
+  },
+  onTerminalExit: (callback: (id: string, exitCode: number) => void) => {
+    ipcRenderer.on('terminal-exit', (_, id, exitCode) => callback(id, exitCode))
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
