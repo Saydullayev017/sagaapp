@@ -9,13 +9,13 @@
     <meta
       http-equiv="Content-Security-Policy"
       content="
-        default-src 'self';
-        script-src 'self' 'unsafe-inline';
-        style-src 'self' 'unsafe-inline';
-        img-src 'self' data: blob: file:;
-        font-src 'self' data:;
-        connect-src 'self' file:;
-        media-src 'self' file:;
+        default-src 'self' 'unsafe-inline' http://localhost:*;
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*;
+        style-src 'self' 'unsafe-inline' http://localhost:*;
+        img-src 'self' data: blob: file: http://localhost:*;
+        font-src 'self' data: http://localhost:*;
+        connect-src 'self' file: http://localhost:* ws://localhost:*;
+        media-src 'self' file: http://localhost:*;
         object-src 'none';
         frame-src 'none';
         child-src 'none';
@@ -31,17 +31,13 @@
     <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
     <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
 
+    <link rel="stylesheet" href="./styles.css" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   </head>
-  <body style="background: #1a1a2e !important">
-    <h1 style="color: red">Loading...</h1>
+  <body>
     <div id="app" class="app-container">
       <!-- Структура будет создана через TypeScript -->
     </div>
-    <script>
-      console.log('Inline script running')
-      document.body.innerHTML += '<h1 style="color:green">JS WORKS</h1>'
-    </script>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
