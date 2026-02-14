@@ -66,6 +66,10 @@ export interface ElectronAPI {
     cwd: string,
     files: string
   ) => Promise<{ success: boolean; output?: string; error?: string }>
+  executeCommand: (
+    cwd: string,
+    command: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
 
   // File/Folder operations
   createFile: (
@@ -154,6 +158,8 @@ const electronAPI: ElectronAPI = {
   createFolder: (dirPath: string, folderName: string) =>
     ipcRenderer.invoke('create-folder', dirPath, folderName),
   deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
+  executeCommand: (cwd: string, command: string) =>
+    ipcRenderer.invoke('execute-command', cwd, command),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
