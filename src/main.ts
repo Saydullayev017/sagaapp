@@ -5,7 +5,8 @@ import './styles.css'
 
 // Инициализация приложения после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Japp Markdown Editor starting...')
+  console.log('DOMContentLoaded fired')
+  console.log('window.electronAPI:', window.electronAPI)
 
   // Проверяем наличие API Electron
   if (!window.electronAPI) {
@@ -20,8 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
+    console.log('Calling initializeUI...')
     // Инициализируем UI
     initializeUI()
+
+    // Check if app element has content
+    const app = document.getElementById('app')
+    console.log('app element:', app)
+    console.log('app innerHTML length:', app?.innerHTML?.length)
+    console.log('app first 200 chars:', app?.innerHTML?.substring(0, 200))
+
     console.log('Application initialized successfully')
   } catch (e) {
     console.error('Error initializing UI:', e)
