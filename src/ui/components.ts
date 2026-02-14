@@ -1168,6 +1168,8 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       <span class="git-branch">${branch}</span>
       <span class="git-changes">${changedCount} changes</span>
     `
+
+    await refreshGitChanges()
   } catch {
     statusGit.innerHTML = `
       <span class="git-branch">Not a git repo</span>
