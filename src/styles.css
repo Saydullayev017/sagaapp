@@ -36,6 +36,24 @@
   --warning: #ffc107;
 }
 
+/* Dark Glass theme */
+[data-theme='glass'] {
+  --bg-primary: rgba(15, 20, 35, 0.85);
+  --bg-secondary: rgba(25, 35, 55, 0.75);
+  --bg-tertiary: rgba(35, 50, 75, 0.65);
+  --bg-hover: rgba(108, 99, 255, 0.15);
+  --text-primary: rgba(230, 230, 230, 0.95);
+  --text-secondary: rgba(160, 160, 160, 0.85);
+  --accent: #7c73ff;
+  --accent-hover: #9b96ff;
+  --border-color: rgba(255, 255, 255, 0.12);
+  --success: #69f0ae;
+  --error: #ff5252;
+  --warning: #ffd740;
+  --glass-blur: 12px;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 html,
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -65,6 +83,12 @@ body {
   flex-shrink: 0;
 }
 
+[data-theme='glass'] .titlebar-drag-area {
+  background: rgba(15, 20, 35, 0.9);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
 /* Main layout - 3 panels: sidebar, content, status-bar */
 .main-layout {
   display: flex;
@@ -74,11 +98,23 @@ body {
   overflow: hidden;
 }
 
+[data-theme='glass'] .main-layout {
+  background: linear-gradient(135deg, rgba(15, 20, 35, 0.95) 0%, rgba(25, 35, 55, 0.9) 100%);
+}
+
 /* Sidebar */
 .sidebar {
   min-width: 200px;
   max-width: 500px;
   background: var(--bg-secondary);
+}
+
+[data-theme='glass'] .sidebar {
+  background: rgba(22, 33, 62, 0.85);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-right: 1px solid var(--border-color);
+}
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -358,6 +394,10 @@ body {
   min-width: 0;
 }
 
+[data-theme='glass'] .editor-container {
+  background: rgba(15, 20, 35, 0.6);
+}
+
 /* Editor toolbar */
 .editor-toolbar {
   padding: 10px 16px;
@@ -366,6 +406,13 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+[data-theme='glass'] .editor-toolbar {
+  background: rgba(22, 33, 62, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 }
 
 .toolbar-left,
@@ -395,6 +442,15 @@ body {
 
 .toolbar-btn:active {
   transform: translateY(1px);
+}
+
+.theme-toggle {
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  border: none;
+}
+
+.theme-toggle:hover {
+  background: linear-gradient(135deg, var(--accent-hover), #c084fc);
 }
 
 /* View mode toggle */
@@ -467,6 +523,13 @@ body {
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+}
+
+[data-theme='glass'] .bottom-panel {
+  background: rgba(22, 33, 62, 0.9);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .bottom-panel-tabs {
@@ -1006,6 +1069,13 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   height: 36px;
+}
+
+[data-theme='glass'] .status-bar {
+  background: rgba(15, 52, 96, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .status-left,
