@@ -16,7 +16,7 @@ if (require('electron-squirrel-startup')) {
 let mainWindow: BrowserWindow | null = null
 
 const createWindow = (): BrowserWindow => {
-  const window = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
@@ -37,29 +37,30 @@ const createWindow = (): BrowserWindow => {
   })
 
   // Обработчики событий загрузки
-  window.webContents.once('did-finish-load', () => {
+  win.webContents.once('did-finish-load', () => {
     console.log('Window finished loading')
-    window.focus()
-    window.moveTop()
+    win.focus()
+    win.moveTop()
   })
 
   // Show window immediately and ensure it's visible
-  window.once('ready-to-show', () => {
-    window.show()
-    window.focus()
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
   })
 
-  window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
+  win.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
     console.error('Failed to load:', errorCode, errorDescription)
   })
 
   // Безопасность: предотвращение навигации
-  window.webContents.on('will-navigate', (event, navigationUrl) => {
+  win.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl)
 
     // Разрешить только dev server и локальные файлы
     if (
-      (process.env.NODE_ENV === 'development' && parsedUrl.origin === 'http://localhost:5173') ||
+      (process.env.NODE_ENV === 'development' &&
+        parsedUrl.origin.startsWith('http://localhost:')) ||
       parsedUrl.protocol === 'file:'
     ) {
       return
@@ -69,27 +70,37 @@ const createWindow = (): BrowserWindow => {
   })
 
   // Безопасность: предотвращение новых окон
-  window.webContents.setWindowOpenHandler(() => {
+  win.webContents.setWindowOpenHandler(() => {
     // Блокировать все всплывающие окна
     return { action: 'deny' }
   })
 
-  // Загружаем приложение
-  if (process.env.NODE_ENV === 'development') {
-    window.loadURL('http://localhost:5173').catch(() => {
-      window.loadURL('http://localhost:5174').catch(() => {
-        window.loadURL('http://localhost:5175')
-      })
-    })
-    window.webContents.openDevTools({ mode: 'detach' })
-  } else {
-    window.loadFile(path.join(__dirname, '../renderer/index.html'))
+  // Загружаем приложение - пробуем все возможные порты
+  const loadDevApp = async () => {
+    const ports = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180]
+
+    for (const port of ports) {
+      try {
+        await win.loadURL(`http://localhost:${port}`)
+        console.log(`Loaded from http://localhost:${port}`)
+        win.webContents.openDevTools({ mode: 'detach' })
+        return
+      } catch (e) {
+        console.log(`Failed to load port ${port}`)
+      }
+    }
+
+    // Если не удалось - пробуем production
+    console.log('Loading production build...')
+    win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
-  // Регистрация событий окна
-  registerWindowEvents(window)
+  loadDevApp()
 
-  return window
+  // Регистрация событий окна
+  registerWindowEvents(win)
+
+  return win
 }
 
 app.on('ready', () => {
@@ -107,31 +118,3 @@ app.on('activate', () => {
     mainWindow = createWindow()
   }
 })
-
-// Обработка событий перед выходом
-app.on('before-quit', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // Здесь можно добавить логику сохранения данных
-    console.log('Приложение закрывается')
-  }
-})
-
-// Предотвращение множественных экземпляров (для production)
-// Временно отключено для разработки
-/*
-const gotTheLock = app.requestSingleInstanceLock()
-
-if (!gotTheLock) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    // Кто-то пытается запустить второй экземпляр
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.focus()
-    }
-  })
-}
-*/
