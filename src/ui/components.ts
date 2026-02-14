@@ -39,6 +39,11 @@ interface UIState {
   line: number
   column: number
   fileTree: FileTreeState
+  gitChanges: {
+    staged: string[]
+    unstaged: string[]
+  }
+  activeBottomPanel: 'git' | 'terminal' | null
 }
 
 const state: UIState = {
@@ -59,6 +64,13 @@ const state: UIState = {
     fileCount: 0,
     folderCount: 0,
   },
+
+  gitChanges: {
+    staged: [],
+    unstaged: [],
+  },
+
+  activeBottomPanel: null,
 }
 
 // CodeMirror editor instance
@@ -123,6 +135,39 @@ export function initializeUI(): void {
             <div class="preview-content" id="preview-content"></div>
           </div>
         </div>
+
+        <!-- Bottom Panel: Git / Terminal -->
+        <div class="bottom-panel" id="bottom-panel">
+          <div class="bottom-panel-tabs">
+            <button class="panel-tab active" data-panel="git">Git</button>
+            <button class="panel-tab" data-panel="terminal">Terminal</button>
+          </div>
+          <div class="bottom-panel-content">
+            <div class="git-panel" id="git-panel">
+              <div class="git-changes">
+                <div class="git-changes-header">
+                  <span class="git-changes-title">Changes</span>
+                  <div class="git-actions">
+                    <button class="git-action-btn" id="git-stage-all" title="Stage All">+</button>
+                    <button class="git-action-btn" id="git-unstage-all" title="Unstage All">-</button>
+                  </div>
+                </div>
+                <div class="git-files-list" id="git-files-list"></div>
+              </div>
+              <div class="git-commit-area">
+                <textarea class="git-commit-message" id="git-commit-message" placeholder="Commit message..."></textarea>
+                <button class="git-commit-btn" id="git-commit-btn">Commit</button>
+              </div>
+            </div>
+            <div class="terminal-panel hidden" id="terminal-panel">
+              <div class="terminal-output" id="terminal-output"></div>
+              <div class="terminal-input-wrapper">
+                <span class="terminal-prompt">$</span>
+                <input type="text" class="terminal-input" id="terminal-input" placeholder="Enter command..." />
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
     
@@ -151,6 +196,7 @@ export function initializeUI(): void {
   setupCodeMirrorEditor()
   setupDragDrop()
   setupPasteHandler()
+  setupBottomPanel()
 
   // Восстанавливаем состояние или открываем дефолтную папку
   setTimeout(async () => {
@@ -843,6 +889,165 @@ function formatMarkdown(): void {
   showNotification('Markdown formatted', 'success')
 }
 
+function setupBottomPanel(): void {
+  document.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.addEventListener('click', e => {
+      const target = e.currentTarget as HTMLElement
+      const panel = target.dataset.panel as 'git' | 'terminal'
+      switchBottomPanel(panel)
+    })
+  })
+
+  document.getElementById('git-stage-all')?.addEventListener('click', stageAllFiles)
+  document.getElementById('git-unstage-all')?.addEventListener('click', unstageAllFiles)
+  document.getElementById('git-commit-btn')?.addEventListener('click', commitChanges)
+
+  const commitInput = document.getElementById('git-commit-message') as HTMLTextAreaElement
+  commitInput?.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      commitChanges()
+    }
+  })
+}
+
+function switchBottomPanel(panel: 'git' | 'terminal'): void {
+  state.activeBottomPanel = panel
+
+  document.querySelectorAll('.panel-tab').forEach(tab => {
+    tab.classList.toggle('active', (tab as HTMLElement).dataset.panel === panel)
+  })
+
+  const gitPanel = document.getElementById('git-panel')
+  const terminalPanel = document.getElementById('terminal-panel')
+
+  if (panel === 'git') {
+    gitPanel?.classList.remove('hidden')
+    terminalPanel?.classList.add('hidden')
+  } else {
+    gitPanel?.classList.add('hidden')
+    terminalPanel?.classList.remove('hidden')
+  }
+}
+
+async function refreshGitChanges(): Promise<void> {
+  if (!state.currentFolder) return
+
+  try {
+    const statusResult = await window.electronAPI?.gitStatus(state.currentFolder)
+    if (statusResult?.success && statusResult.files) {
+      const staged: string[] = []
+      const unstaged: string[] = []
+
+      statusResult.files.forEach((file: any) => {
+        if (file.staged) {
+          staged.push(file.path)
+        } else {
+          unstaged.push(file.path)
+        }
+      })
+
+      state.gitChanges.staged = staged
+      state.gitChanges.unstaged = unstaged
+
+      renderGitFilesList()
+    }
+  } catch (e) {
+    console.error('Failed to refresh git changes:', e)
+  }
+}
+
+function renderGitFilesList(): void {
+  const container = document.getElementById('git-files-list')
+  if (!container) return
+
+  const allFiles = [
+    ...state.gitChanges.unstaged.map(f => ({ path: f, staged: false })),
+    ...state.gitChanges.staged.map(f => ({ path: f, staged: true })),
+  ]
+
+  if (allFiles.length === 0) {
+    container.innerHTML = '<div class="git-empty">No changes</div>'
+    return
+  }
+
+  container.innerHTML = allFiles
+    .map(
+      file => `
+      <div class="git-file-item ${file.staged ? 'staged' : 'unstaged'}">
+        <span class="git-file-status">${file.staged ? 'S' : 'U'}</span>
+        <span class="git-file-path">${file.path}</span>
+        <button class="git-file-action" data-path="${file.path}" data-action="${file.staged ? 'unstage' : 'stage'}">
+          ${file.staged ? '-' : '+'}
+        </button>
+      </div>
+    `
+    )
+    .join('')
+
+  container.querySelectorAll('.git-file-action').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const target = e.currentTarget as HTMLElement
+      const path = target.dataset.path || ''
+      const action = target.dataset.action || ''
+      if (action === 'stage') {
+        await stageFile(path)
+      } else {
+        await unstageFile(path)
+      }
+    })
+  })
+}
+
+async function stageFile(filePath: string): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitAdd(state.currentFolder, filePath)
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function unstageFile(filePath: string): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitReset(state.currentFolder, filePath)
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function stageAllFiles(): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitAdd(state.currentFolder, '.')
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function unstageAllFiles(): Promise<void> {
+  if (!state.currentFolder) return
+  await window.electronAPI?.gitReset(state.currentFolder, '.')
+  await refreshGitChanges()
+  updateGitStatus(state.currentFolder)
+}
+
+async function commitChanges(): Promise<void> {
+  const commitInput = document.getElementById('git-commit-message') as HTMLTextAreaElement
+  const message = commitInput?.value.trim()
+
+  if (!message) {
+    showNotification('Enter commit message', 'error')
+    return
+  }
+
+  if (!state.currentFolder) return
+
+  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+  if (result?.success) {
+    showNotification('Committed successfully', 'success')
+    commitInput.value = ''
+    await refreshGitChanges()
+    updateGitStatus(state.currentFolder)
+  } else {
+    showNotification(result?.error || 'Commit failed', 'error')
+  }
+}
+
 function setupDragDrop(): void {
   const editorPane = document.getElementById('editor-pane')
   if (!editorPane) return
@@ -963,6 +1168,8 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       <span class="git-branch">${branch}</span>
       <span class="git-changes">${changedCount} changes</span>
     `
+
+    await refreshGitChanges()
   } catch {
     statusGit.innerHTML = `
       <span class="git-branch">Not a git repo</span>

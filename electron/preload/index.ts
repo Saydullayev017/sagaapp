@@ -58,6 +58,14 @@ export interface ElectronAPI {
   gitBranch: (cwd: string) => Promise<{ success: boolean; branch?: string; error?: string }>
   gitPush: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
   gitPull: (cwd: string) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitAdd: (
+    cwd: string,
+    files: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitReset: (
+    cwd: string,
+    files: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
 
   // File/Folder operations
   createFile: (
@@ -137,6 +145,8 @@ const electronAPI: ElectronAPI = {
   gitBranch: (cwd: string) => ipcRenderer.invoke('git-branch', cwd),
   gitPush: (cwd: string) => ipcRenderer.invoke('git-push', cwd),
   gitPull: (cwd: string) => ipcRenderer.invoke('git-pull', cwd),
+  gitAdd: (cwd: string, files: string) => ipcRenderer.invoke('git-add', cwd, files),
+  gitReset: (cwd: string, files: string) => ipcRenderer.invoke('git-reset', cwd, files),
 
   // File/Folder operations
   createFile: (dirPath: string, fileName: string) =>
