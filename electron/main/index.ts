@@ -19,26 +19,29 @@ const createWindow = (): BrowserWindow => {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    backgroundColor: '#1a1a2e',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      experimentalFeatures: false,
-      plugins: false,
+      webSecurity: false,
+      allowRunningInsecureContent: true,
     },
-    frame: false, // Кастомный фрейм (безрамочное окно)
-    transparent: false, // Прозрачность отключена (вызывала проблемы)
-    titleBarStyle: 'hidden', // Скрыть стандартную панель заголовка
-    titleBarOverlay: false,
-    show: true, // Показывать окно сразу
+    frame: true,
+    titleBarStyle: 'default',
+    show: true,
   })
+
+  win.show()
+  win.focus()
 
   // Обработчики событий загрузки
   win.webContents.once('did-finish-load', () => {
     console.log('Window finished loading')
+    win.show()
     win.focus()
     win.moveTop()
   })
@@ -71,31 +74,13 @@ const createWindow = (): BrowserWindow => {
 
   // Безопасность: предотвращение новых окон
   win.webContents.setWindowOpenHandler(() => {
-    // Блокировать все всплывающие окна
     return { action: 'deny' }
   })
 
-  // Загружаем приложение - пробуем все возможные порты
-  const loadDevApp = async () => {
-    const ports = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180]
-
-    for (const port of ports) {
-      try {
-        await win.loadURL(`http://localhost:${port}`)
-        console.log(`Loaded from http://localhost:${port}`)
-        win.webContents.openDevTools({ mode: 'detach' })
-        return
-      } catch (e) {
-        console.log(`Failed to load port ${port}`)
-      }
-    }
-
-    // Если не удалось - пробуем production
-    console.log('Loading production build...')
-    win.loadFile(path.join(__dirname, '../renderer/index.html'))
-  }
-
-  loadDevApp()
+  // Загружаем production сборку
+  const filePath = path.join(__dirname, '../renderer/index.html')
+  console.log('Loading:', filePath)
+  win.loadFile(filePath)
 
   // Регистрация событий окна
   registerWindowEvents(win)
