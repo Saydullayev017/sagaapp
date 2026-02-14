@@ -99,6 +99,11 @@ export function initializeUI(): void {
             <span class="file-count" id="file-count"></span>
           </div>
         </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="file-tree-search">
+          <input type="text" id="tree-search" placeholder="Search files..." />
+        </div>
+        <div class="file-tree" id="file-tree"></div>
       </aside>
       
       <!-- Resize Handle for Sidebar -->
