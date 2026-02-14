@@ -201,6 +201,7 @@ export function initializeUI(): void {
   setupDragDrop()
   setupPasteHandler()
   setupBottomPanel()
+  setupTerminal()
 
   // Восстанавливаем состояние или открываем дефолтную папку
   setTimeout(async () => {
@@ -952,7 +953,43 @@ function switchBottomPanel(panel: 'git' | 'terminal'): void {
   } else {
     gitPanel?.classList.add('hidden')
     terminalPanel?.classList.remove('hidden')
+    document.getElementById('terminal-input')?.focus()
   }
+}
+
+function setupTerminal(): void {
+  const terminalInput = document.getElementById('terminal-input') as HTMLInputElement
+  terminalInput?.addEventListener('keydown', async e => {
+    if (e.key === 'Enter') {
+      const command = terminalInput.value.trim()
+      if (command) {
+        await executeTerminalCommand(command)
+        terminalInput.value = ''
+      }
+    }
+  })
+}
+
+async function executeTerminalCommand(command: string): Promise<void> {
+  const output = document.getElementById('terminal-output')
+  if (!output) return
+
+  const cwd = state.currentFolder || process.cwd()
+
+  output.innerHTML += `<div class="terminal-line"><span class="terminal-prompt">$</span> ${command}</div>`
+
+  try {
+    const result = await window.electronAPI?.executeCommand(cwd, command)
+    if (result?.success) {
+      output.innerHTML += `<div class="terminal-output-text">${escapeHtml(result.output || '')}</div>`
+    } else {
+      output.innerHTML += `<div class="terminal-error">${escapeHtml(result?.error || 'Command failed')}</div>`
+    }
+  } catch (e) {
+    output.innerHTML += `<div class="terminal-error">${escapeHtml(String(e))}</div>`
+  }
+
+  output.scrollTop = output.scrollHeight
 }
 
 async function refreshGitChanges(): Promise<void> {

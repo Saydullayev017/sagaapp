@@ -299,6 +299,23 @@ export const registerIpcHandlers = () => {
       return { success: false, error: error.message }
     }
   })
+
+  ipcMain.handle('execute-command', async (_event, cwd: string, command: string) => {
+    try {
+      const { exec } = require('child_process')
+      return new Promise(resolve => {
+        exec(command, { cwd }, (error: any, stdout: string, stderr: string) => {
+          if (error) {
+            resolve({ success: false, error: error.message, output: stderr || stdout })
+          } else {
+            resolve({ success: true, output: stdout || stderr })
+          }
+        })
+      })
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
 }
 
 // Регистрация событий окна
