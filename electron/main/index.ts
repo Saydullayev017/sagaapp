@@ -32,11 +32,7 @@ const createWindow = (): BrowserWindow => {
     frame: false, // Кастомный фрейм (безрамочное окно)
     transparent: false, // Прозрачность отключена (вызывала проблемы)
     titleBarStyle: 'hidden', // Скрыть стандартную панель заголовка
-    titleBarOverlay: {
-      color: '#1a1a2e',
-      symbolColor: '#e6e6e6',
-      height: 40,
-    },
+    titleBarOverlay: false,
     show: true, // Показывать окно сразу
   })
 
@@ -79,11 +75,31 @@ const createWindow = (): BrowserWindow => {
   })
 
   // Загружаем приложение
-  const loadApp = () => {
-    if (process.env.NODE_ENV === 'development') {
-      window.loadURL('http://localhost:5173')
-    } else {
-      window.loadFile(path.join(__dirname, '../renderer/index.html'))
+  const loadApp = async () => {
+    console.log('Loading app...')
+
+    // Check if we're in development by trying to connect to dev server
+    try {
+      await window.loadURL('http://localhost:5173')
+      console.log('Loaded from dev server (5173)')
+      window.webContents.openDevTools({ mode: 'detach' })
+    } catch {
+      try {
+        await window.loadURL('http://localhost:5174')
+        console.log('Loaded from dev server (5174)')
+        window.webContents.openDevTools({ mode: 'detach' })
+      } catch {
+        try {
+          await window.loadURL('http://localhost:5175')
+          console.log('Loaded from dev server (5175)')
+          window.webContents.openDevTools({ mode: 'detach' })
+        } catch {
+          // Load from file (production)
+          const filePath = path.join(__dirname, '../renderer/index.html')
+          console.log('Loading from file:', filePath)
+          await window.loadFile(filePath)
+        }
+      }
     }
   }
 
