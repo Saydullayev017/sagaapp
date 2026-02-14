@@ -33,10 +33,15 @@
 
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   </head>
-  <body>
+  <body style="background: #1a1a2e !important">
+    <h1 style="color: red">Loading...</h1>
     <div id="app" class="app-container">
       <!-- Структура будет создана через TypeScript -->
     </div>
+    <script>
+      console.log('Inline script running')
+      document.body.innerHTML += '<h1 style="color:green">JS WORKS</h1>'
+    </script>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
