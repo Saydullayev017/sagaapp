@@ -119,6 +119,7 @@ export function initializeUI(): void {
             <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
           </div>
           <div class="toolbar-right">
+            <button class="toolbar-btn theme-toggle" id="theme-toggle" title="Toggle Theme">Theme</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -189,6 +190,9 @@ export function initializeUI(): void {
       </div>
     </footer>
   `
+
+  // Загружаем тему
+  loadTheme()
 
   // Добавляем обработчики событий
   setupEventListeners()
@@ -283,6 +287,9 @@ function setupEventListeners(): void {
   document.getElementById('git-commit')?.addEventListener('click', gitCommit)
   document.getElementById('git-push')?.addEventListener('click', gitPush)
   document.getElementById('git-pull')?.addEventListener('click', gitPull)
+
+  // Theme toggle
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme)
 }
 
 // Search functionality
@@ -908,6 +915,25 @@ function setupBottomPanel(): void {
       commitChanges()
     }
   })
+}
+
+function toggleTheme(): void {
+  const themes = ['dark', 'light', 'glass']
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
+  const currentIndex = themes.indexOf(currentTheme)
+  const nextIndex = (currentIndex + 1) % themes.length
+  const nextTheme = themes[nextIndex]
+
+  document.documentElement.setAttribute('data-theme', nextTheme)
+  localStorage.setItem('japp-theme', nextTheme)
+  showNotification(`Theme: ${nextTheme}`, 'info')
+}
+
+function loadTheme(): void {
+  const savedTheme = localStorage.getItem('japp-theme')
+  if (savedTheme && ['dark', 'light', 'glass'].includes(savedTheme)) {
+    document.documentElement.setAttribute('data-theme', savedTheme)
+  }
 }
 
 function switchBottomPanel(panel: 'git' | 'terminal'): void {
