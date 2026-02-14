@@ -245,6 +245,26 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  ipcMain.handle('git-add', async (_event, cwd: string, files: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(`git add ${files}`, { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-reset', async (_event, cwd: string, files: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(`git reset HEAD ${files}`, { cwd })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // File/Folder creation
+
   // File/Folder creation
   ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
     try {
