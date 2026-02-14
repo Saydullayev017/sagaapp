@@ -149,6 +149,8 @@ export function initializeUI(): void {
   setupEventListeners()
   setupResizeHandles()
   setupCodeMirrorEditor()
+  setupDragDrop()
+  setupPasteHandler()
 
   // Восстанавливаем состояние или открываем дефолтную папку
   setTimeout(async () => {
@@ -839,6 +841,108 @@ function formatMarkdown(): void {
 
   setEditorContent(cmEditor, content)
   showNotification('Markdown formatted', 'success')
+}
+
+function setupDragDrop(): void {
+  const editorPane = document.getElementById('editor-pane')
+  if (!editorPane) return
+
+  editorPane.addEventListener('dragover', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.add('drag-over')
+  })
+
+  editorPane.addEventListener('dragleave', e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.remove('drag-over')
+  })
+
+  editorPane.addEventListener('drop', async e => {
+    e.preventDefault()
+    e.stopPropagation()
+    editorPane.classList.remove('drag-over')
+
+    const files = e.dataTransfer?.files
+    if (!files || files.length === 0) return
+
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) {
+        await handleImageDrop(file)
+      }
+    }
+  })
+}
+
+async function handleImageDrop(file: File): Promise<void> {
+  if (!state.currentFolder || !cmEditor) {
+    showNotification('Open a folder first', 'error')
+    return
+  }
+
+  try {
+    const assetsPath = `${state.currentFolder}/assets`
+
+    // Ensure assets folder exists
+    await window.electronAPI?.createFolder(assetsPath, '').catch(() => {})
+
+    // Generate unique filename
+    const timestamp = Date.now()
+    const ext = file.name.split('.').pop() || 'png'
+    const fileName = `${timestamp}-${file.name.replace(/\.[^/.]+$/, '')}.${ext}`
+    const fullPath = `${assetsPath}/${fileName}`
+
+    // Read file as base64
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1]
+
+      // Write file
+      const result = await window.electronAPI?.writeFile(fullPath, atob(base64))
+      if (result?.success) {
+        const markdown = `![${file.name}](./assets/${fileName})\n`
+        insertTextAtCursor(markdown)
+        showNotification('Image saved', 'success')
+        loadFileTree(state.currentFolder!)
+      } else {
+        showNotification('Failed to save image', 'error')
+      }
+    }
+    reader.readAsDataURL(file)
+  } catch (e) {
+    console.error('Image drop error:', e)
+    showNotification('Failed to process image', 'error')
+  }
+}
+
+function insertTextAtCursor(text: string): void {
+  if (!cmEditor) return
+
+  const pos = cmEditor.state.selection.main.head
+  cmEditor.dispatch({
+    changes: { from: pos, insert: text },
+    selection: { anchor: pos + text.length },
+  })
+  cmEditor.focus()
+}
+
+function setupPasteHandler(): void {
+  document.addEventListener('paste', async e => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) {
+          await handleImageDrop(file)
+        }
+        break
+      }
+    }
+  })
 }
 
 async function updateGitStatus(folderPath: string): Promise<void> {
