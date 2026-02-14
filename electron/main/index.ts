@@ -12,9 +12,6 @@ if (require('electron-squirrel-startup')) {
   app.quit()
 }
 
-// Хранение ссылки на главное окно
-let mainWindow: BrowserWindow | null = null
-
 const createWindow = (): BrowserWindow => {
   const win = new BrowserWindow({
     width: 1200,
@@ -30,8 +27,8 @@ const createWindow = (): BrowserWindow => {
       webSecurity: false,
       allowRunningInsecureContent: true,
     },
-    frame: true,
-    titleBarStyle: 'default',
+    frame: false,
+    titleBarStyle: 'hidden',
     show: true,
   })
 
@@ -89,7 +86,7 @@ const createWindow = (): BrowserWindow => {
 }
 
 app.on('ready', () => {
-  mainWindow = createWindow()
+  createWindow()
 })
 
 app.on('window-all-closed', () => {
@@ -100,6 +97,6 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    mainWindow = createWindow()
+    createWindow()
   }
 })

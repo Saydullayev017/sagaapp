@@ -2,6 +2,7 @@
 
 import { initializeUI } from './ui/components'
 import './styles.css'
+import 'xterm/css/xterm.css'
 
 // Инициализация приложения после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,4 +1,6 @@
 import { EditorView } from '@codemirror/view'
+import { Terminal } from 'xterm'
+import { FitAddon } from 'xterm-addon-fit'
 import {
   createCodeMirrorEditor,
   getEditorContent,
@@ -39,11 +41,10 @@ interface UIState {
   line: number
   column: number
   fileTree: FileTreeState
-  gitChanges: {
-    staged: string[]
-    unstaged: string[]
-  }
-  activeBottomPanel: 'git' | 'terminal' | null
+  activeTerminal: number
+  terminalCount: number
+  terminals: { [key: string]: { terminal: Terminal; fitAddon: FitAddon } }
+  terminalHeight: number
 }
 
 const state: UIState = {
@@ -65,12 +66,10 @@ const state: UIState = {
     folderCount: 0,
   },
 
-  gitChanges: {
-    staged: [],
-    unstaged: [],
-  },
-
-  activeBottomPanel: null,
+  activeTerminal: 1,
+  terminalCount: 1,
+  terminals: {},
+  terminalHeight: 250,
 }
 
 // CodeMirror editor instance
@@ -88,7 +87,32 @@ export function initializeUI(): void {
   if (!app) return
 
   app.innerHTML = `
-    <div class="titlebar-drag-area"></div>
+    <!-- Custom Titlebar -->
+    <div class="custom-titlebar" id="custom-titlebar">
+      <div class="titlebar-title">
+        <svg class="titlebar-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z"/>
+        </svg>
+        <span>Japp - Markdown Editor</span>
+      </div>
+      <div class="titlebar-controls">
+        <button class="titlebar-btn" id="titlebar-minimize" title="Minimize">
+          <svg viewBox="0 0 10 10" fill="currentColor">
+            <rect x="0" y="4.5" width="10" height="1"/>
+          </svg>
+        </button>
+        <button class="titlebar-btn" id="titlebar-maximize" title="Maximize">
+          <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="0.5" y="0.5" width="9" height="9"/>
+          </svg>
+        </button>
+        <button class="titlebar-btn close" id="titlebar-close" title="Close">
+          <svg viewBox="0 0 10 10" fill="currentColor">
+            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
     
     <div class="main-layout">
       <!-- Left Panel: Sidebar -->
@@ -112,19 +136,9 @@ export function initializeUI(): void {
       <!-- Center Panel: Editor -->
       <main class="editor-container">
         <div class="editor-toolbar">
-          <div class="toolbar-left">
-            <button class="toolbar-btn" id="format-btn">Format</button>
-            <button class="toolbar-btn" id="open-file-btn">Open</button>
-            <button class="toolbar-btn" id="new-file-btn" title="New File">New File</button>
-            <button class="toolbar-btn" id="new-folder-btn" title="New Folder">New Folder</button>
-          </div>
-          <div class="toolbar-center">
-            <button class="toolbar-btn git-btn" id="git-commit" title="Commit">Commit</button>
-            <button class="toolbar-btn git-btn" id="git-push" title="Push">Push</button>
-            <button class="toolbar-btn git-btn" id="git-pull" title="Pull">Pull</button>
-          </div>
+          <div class="toolbar-left"></div>
+          <div class="toolbar-center"></div>
           <div class="toolbar-right">
-            <button class="toolbar-btn theme-toggle" id="theme-toggle" title="Toggle Theme">Theme</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -140,37 +154,18 @@ export function initializeUI(): void {
           <div class="preview-pane hidden" id="preview-pane">
             <div class="preview-content" id="preview-content"></div>
           </div>
-        </div>
-
-        <!-- Bottom Panel: Git / Terminal -->
-        <div class="bottom-panel" id="bottom-panel">
-          <div class="bottom-panel-tabs">
-            <button class="panel-tab active" data-panel="git">Git</button>
-            <button class="panel-tab" data-panel="terminal">Terminal</button>
           </div>
-          <div class="bottom-panel-content">
-            <div class="git-panel" id="git-panel">
-              <div class="git-changes">
-                <div class="git-changes-header">
-                  <span class="git-changes-title">Changes</span>
-                  <div class="git-actions">
-                    <button class="git-action-btn" id="git-stage-all" title="Stage All">+</button>
-                    <button class="git-action-btn" id="git-unstage-all" title="Unstage All">-</button>
-                  </div>
-                </div>
-                <div class="git-files-list" id="git-files-list"></div>
-              </div>
-              <div class="git-commit-area">
-                <textarea class="git-commit-message" id="git-commit-message" placeholder="Commit message..."></textarea>
-                <button class="git-commit-btn" id="git-commit-btn">Commit</button>
-              </div>
-            </div>
-            <div class="terminal-panel hidden" id="terminal-panel">
-              <div class="terminal-output" id="terminal-output"></div>
-              <div class="terminal-input-wrapper">
-                <span class="terminal-prompt">$</span>
-                <input type="text" class="terminal-input" id="terminal-input" placeholder="Enter command..." />
-              </div>
+
+        <!-- Bottom Panel: Terminal -->
+        <div class="terminal-resize-handle" id="terminal-resize"></div>
+        <div class="bottom-panel" id="bottom-panel">
+          <div class="terminal-tabs">
+            <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+            <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+          </div>
+          <div class="terminal-panels">
+            <div class="terminal-panel active" data-terminal="1">
+              <div class="terminal-container" id="terminal-container-1"></div>
             </div>
           </div>
         </div>
@@ -224,6 +219,37 @@ export function initializeUI(): void {
 }
 
 function setupEventListeners(): void {
+  // Titlebar controls
+  document.getElementById('titlebar-minimize')?.addEventListener('click', () => {
+    window.electronAPI?.minimizeWindow()
+  })
+
+  document.getElementById('titlebar-maximize')?.addEventListener('click', () => {
+    window.electronAPI?.toggleMaximize()
+  })
+
+  document.getElementById('titlebar-close')?.addEventListener('click', () => {
+    window.electronAPI?.closeWindow()
+  })
+
+  // Track maximize state
+  window.electronAPI?.onWindowMaximize(isMaximized => {
+    const maxBtn = document.getElementById('titlebar-maximize')
+    if (maxBtn) {
+      maxBtn.innerHTML = isMaximized
+        ? `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="2.5" y="0.5" width="7" height="7"/>
+            <path d="M0.5 2.5h7v7h-7z"/>
+          </svg>`
+        : `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+            <rect x="0.5" y="0.5" width="9" height="9"/>
+          </svg>`
+    }
+  })
+
+  // Terminal resize
+  setupTerminalResize()
+
   // Открытие файла
   document.getElementById('open-file-btn')?.addEventListener('click', openFile)
 
@@ -293,9 +319,6 @@ function setupEventListeners(): void {
   document.getElementById('git-commit')?.addEventListener('click', gitCommit)
   document.getElementById('git-push')?.addEventListener('click', gitPush)
   document.getElementById('git-pull')?.addEventListener('click', gitPull)
-
-  // Theme toggle
-  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme)
 }
 
 // Search functionality
@@ -903,98 +926,69 @@ function formatMarkdown(): void {
 }
 
 function setupBottomPanel(): void {
-  document.querySelectorAll('.panel-tab').forEach(tab => {
+  document.querySelectorAll('.terminal-tab').forEach(tab => {
     tab.addEventListener('click', e => {
       const target = e.currentTarget as HTMLElement
-      const panel = target.dataset.panel as 'git' | 'terminal'
-      switchBottomPanel(panel)
+      const terminalId = target.dataset.terminal
+      if (terminalId) {
+        switchTerminal(parseInt(terminalId))
+      }
     })
   })
 
-  document.getElementById('git-stage-all')?.addEventListener('click', stageAllFiles)
-  document.getElementById('git-unstage-all')?.addEventListener('click', unstageAllFiles)
-  document.getElementById('git-commit-btn')?.addEventListener('click', commitChanges)
+  document.getElementById('terminal-add')?.addEventListener('click', addTerminal)
+}
 
-  const commitInput = document.getElementById('git-commit-message') as HTMLTextAreaElement
-  commitInput?.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      commitChanges()
-    }
+function switchTerminal(id: number): void {
+  state.activeTerminal = id
+
+  document.querySelectorAll('.terminal-tab').forEach(tab => {
+    tab.classList.toggle('active', (tab as HTMLElement).dataset.terminal === String(id))
   })
-}
 
-function toggleTheme(): void {
-  const themes = ['dark', 'light', 'glass']
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark'
-  const currentIndex = themes.indexOf(currentTheme)
-  const nextIndex = (currentIndex + 1) % themes.length
-  const nextTheme = themes[nextIndex]
+  document.querySelectorAll('.terminal-panel').forEach(panel => {
+    panel.classList.toggle('active', (panel as HTMLElement).dataset.terminal === String(id))
+  })
 
-  document.documentElement.setAttribute('data-theme', nextTheme)
-  localStorage.setItem('japp-theme', nextTheme)
-  showNotification(`Theme: ${nextTheme}`, 'info')
-}
-
-function loadTheme(): void {
-  const savedTheme = localStorage.getItem('japp-theme')
-  if (savedTheme && ['dark', 'light', 'glass'].includes(savedTheme)) {
-    document.documentElement.setAttribute('data-theme', savedTheme)
+  const term = state.terminals[String(id)]
+  if (term) {
+    setTimeout(() => {
+      term.fitAddon.fit()
+      window.electronAPI?.terminalResize(String(id), term.terminal.cols, term.terminal.rows)
+    }, 10)
   }
 }
 
-function switchBottomPanel(panel: 'git' | 'terminal'): void {
-  state.activeBottomPanel = panel
+function addTerminal(): void {
+  state.terminalCount++
+  const id = state.terminalCount
 
-  document.querySelectorAll('.panel-tab').forEach(tab => {
-    tab.classList.toggle('active', (tab as HTMLElement).dataset.panel === panel)
-  })
+  const tabsContainer = document.querySelector('.terminal-tabs')
+  const addBtn = document.getElementById('terminal-add')
+  const newTab = document.createElement('button')
+  newTab.className = 'terminal-tab active'
+  newTab.dataset.terminal = String(id)
+  newTab.textContent = `Terminal ${id}`
+  newTab.addEventListener('click', () => switchTerminal(id))
+  tabsContainer?.insertBefore(newTab, addBtn)
 
-  const gitPanel = document.getElementById('git-panel')
-  const terminalPanel = document.getElementById('terminal-panel')
+  const panelsContainer = document.querySelector('.terminal-panels')
+  const newPanel = document.createElement('div')
+  newPanel.className = 'terminal-panel active'
+  newPanel.dataset.terminal = String(id)
+  newPanel.innerHTML = `
+    <div class="terminal-container" id="terminal-container-${id}"></div>
+  `
+  panelsContainer?.appendChild(newPanel)
 
-  if (panel === 'git') {
-    gitPanel?.classList.remove('hidden')
-    terminalPanel?.classList.add('hidden')
-  } else {
-    gitPanel?.classList.add('hidden')
-    terminalPanel?.classList.remove('hidden')
-    document.getElementById('terminal-input')?.focus()
-  }
-}
-
-function setupTerminal(): void {
-  const terminalInput = document.getElementById('terminal-input') as HTMLInputElement
-  terminalInput?.addEventListener('keydown', async e => {
-    if (e.key === 'Enter') {
-      const command = terminalInput.value.trim()
-      if (command) {
-        await executeTerminalCommand(command)
-        terminalInput.value = ''
-      }
+  document.querySelectorAll('.terminal-panel').forEach(panel => {
+    if (panel !== newPanel) {
+      panel.classList.remove('active')
     }
   })
-}
 
-async function executeTerminalCommand(command: string): Promise<void> {
-  const output = document.getElementById('terminal-output')
-  if (!output) return
-
-  const cwd = state.currentFolder || process.cwd()
-
-  output.innerHTML += `<div class="terminal-line"><span class="terminal-prompt">$</span> ${command}</div>`
-
-  try {
-    const result = await window.electronAPI?.executeCommand(cwd, command)
-    if (result?.success) {
-      output.innerHTML += `<div class="terminal-output-text">${escapeHtml(result.output || '')}</div>`
-    } else {
-      output.innerHTML += `<div class="terminal-error">${escapeHtml(result?.error || 'Command failed')}</div>`
-    }
-  } catch (e) {
-    output.innerHTML += `<div class="terminal-error">${escapeHtml(String(e))}</div>`
-  }
-
-  output.scrollTop = output.scrollHeight
+  createTerminal(id)
+  state.activeTerminal = id
 }
 
 async function refreshGitChanges(): Promise<void> {
@@ -1262,4 +1256,130 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
       notification.remove()
     }, 300)
   }, 3000)
+}
+
+function loadTheme(): void {
+  const savedTheme = localStorage.getItem('japp-theme')
+  if (savedTheme && ['dark', 'light', 'glass'].includes(savedTheme)) {
+    document.documentElement.setAttribute('data-theme', savedTheme)
+  }
+}
+
+function setupTerminal(): void {
+  createTerminal(1)
+
+  window.electronAPI?.onTerminalData((id, data) => {
+    const term = state.terminals[id]
+    if (term) {
+      term.terminal.write(data)
+    }
+  })
+
+  window.electronAPI?.onTerminalExit((id, exitCode) => {
+    const term = state.terminals[id]
+    if (term) {
+      term.terminal.write(`\r\n\x1b[33mProcess exited with code ${exitCode}\x1b[0m\r\n`)
+    }
+  })
+
+  window.addEventListener('resize', () => {
+    Object.values(state.terminals).forEach(({ fitAddon }) => {
+      fitAddon.fit()
+    })
+  })
+}
+
+async function createTerminal(id: number): Promise<void> {
+  const container = document.getElementById(`terminal-container-${id}`)
+  if (!container || state.terminals[String(id)]) return
+
+  const terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'SF Mono', Monaco, 'Cascadia Code', monospace",
+    theme: {
+      background: '#1a1a2e',
+      foreground: '#e6e6e6',
+      cursor: '#6c63ff',
+      selectionBackground: 'rgba(108, 99, 255, 0.3)',
+    },
+    scrollback: 10000,
+    allowProposedApi: true,
+  })
+
+  const fitAddon = new FitAddon()
+  terminal.loadAddon(fitAddon)
+
+  terminal.open(container)
+  fitAddon.fit()
+
+  state.terminals[String(id)] = { terminal, fitAddon }
+
+  terminal.onData(data => {
+    window.electronAPI?.terminalInput(String(id), data)
+  })
+
+  const cwd = state.currentFolder || process.env.HOME || '/'
+  await window.electronAPI?.terminalCreate(String(id), cwd)
+
+  setTimeout(() => {
+    fitAddon.fit()
+  }, 100)
+}
+
+function setupTerminalResize(): void {
+  const resizeHandle = document.getElementById('terminal-resize')
+  const bottomPanel = document.getElementById('bottom-panel')
+
+  if (!resizeHandle || !bottomPanel) return
+
+  let isResizing = false
+  let startY = 0
+  let startHeight = 0
+
+  resizeHandle.addEventListener('mousedown', e => {
+    isResizing = true
+    startY = e.clientY
+    startHeight = bottomPanel.offsetHeight
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    resizeHandle.classList.add('resizing')
+  })
+
+  document.addEventListener('mousemove', e => {
+    if (!isResizing) return
+
+    const delta = startY - e.clientY
+    const newHeight = Math.max(100, Math.min(window.innerHeight * 0.8, startHeight + delta))
+
+    bottomPanel.style.height = `${newHeight}px`
+    state.terminalHeight = newHeight
+
+    const activeTerm = state.terminals[String(state.activeTerminal)]
+    if (activeTerm) {
+      activeTerm.fitAddon.fit()
+      const cols = activeTerm.terminal.cols
+      const rows = activeTerm.terminal.rows
+      window.electronAPI?.terminalResize(String(state.activeTerminal), cols, rows)
+    }
+  })
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      resizeHandle.classList.remove('resizing')
+      localStorage.setItem('japp-terminal-height', String(state.terminalHeight))
+    }
+  })
+
+  const savedHeight = localStorage.getItem('japp-terminal-height')
+  if (savedHeight) {
+    const height = parseInt(savedHeight)
+    if (height > 0) {
+      bottomPanel.style.height = `${height}px`
+      state.terminalHeight = height
+    }
+  }
 }

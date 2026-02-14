@@ -81,6 +81,17 @@ export interface ElectronAPI {
     folderName: string
   ) => Promise<{ success: boolean; path?: string; error?: string }>
   deleteItem: (itemPath: string) => Promise<{ success: boolean; error?: string }>
+
+  // Terminal
+  terminalCreate: (
+    id: string,
+    cwd?: string
+  ) => Promise<{ success: boolean; pid?: number; error?: string }>
+  terminalInput: (id: string, data: string) => void
+  terminalResize: (id: string, cols: number, rows: number) => void
+  terminalKill: (id: string) => Promise<{ success: boolean; error?: string }>
+  onTerminalData: (callback: (id: string, data: string) => void) => void
+  onTerminalExit: (callback: (id: string, exitCode: number) => void) => void
 }
 
 // Безопасный API через contextBridge
@@ -160,6 +171,19 @@ const electronAPI: ElectronAPI = {
   deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
   executeCommand: (cwd: string, command: string) =>
     ipcRenderer.invoke('execute-command', cwd, command),
+
+  // Terminal
+  terminalCreate: (id: string, cwd?: string) => ipcRenderer.invoke('terminal-create', id, cwd),
+  terminalInput: (id: string, data: string) => ipcRenderer.send('terminal-input', id, data),
+  terminalResize: (id: string, cols: number, rows: number) =>
+    ipcRenderer.send('terminal-resize', id, cols, rows),
+  terminalKill: (id: string) => ipcRenderer.invoke('terminal-kill', id),
+  onTerminalData: (callback: (id: string, data: string) => void) => {
+    ipcRenderer.on('terminal-data', (_, id, data) => callback(id, data))
+  },
+  onTerminalExit: (callback: (id: string, exitCode: number) => void) => {
+    ipcRenderer.on('terminal-exit', (_, id, exitCode) => callback(id, exitCode))
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
