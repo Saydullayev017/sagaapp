@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// Типы для API
+// Electron API types exposed to renderer process
 export interface ElectronAPI {
   // Window controls
   minimizeWindow: () => void
   toggleMaximize: () => void
   closeWindow: () => void
 
-  // File system
+  // File system operations
   readFile: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
   writeFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
   readDirectory: (path: string) => Promise<{
@@ -16,7 +16,7 @@ export interface ElectronAPI {
     error?: string
   }>
 
-  // Dialogs
+  // Native dialogs
   showOpenDialog: (
     options: Electron.OpenDialogOptions
   ) => Promise<{ canceled: boolean; filePaths: string[] }>
@@ -40,7 +40,7 @@ export interface ElectronAPI {
   onWindowEvent: (callback: (event: string, data?: any) => void) => void
   removeAllListeners: (channel: string) => void
 
-  // Git
+  // Git operations
   gitStatus: (cwd: string) => Promise<{
     success: boolean
     isRepo?: boolean
@@ -66,6 +66,19 @@ export interface ElectronAPI {
     cwd: string,
     files: string
   ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitCreateBranch: (
+    cwd: string,
+    branchName: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitCheckout: (
+    cwd: string,
+    branchName: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitMerge: (
+    cwd: string,
+    branchName: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  gitBranchList: (cwd: string) => Promise<{ success: boolean; branches?: string[]; error?: string }>
   executeCommand: (
     cwd: string,
     command: string
@@ -81,8 +94,12 @@ export interface ElectronAPI {
     folderName: string
   ) => Promise<{ success: boolean; path?: string; error?: string }>
   deleteItem: (itemPath: string) => Promise<{ success: boolean; error?: string }>
+  renameItem: (
+    itemPath: string,
+    newName: string
+  ) => Promise<{ success: boolean; newPath?: string; error?: string }>
 
-  // Terminal
+  // Terminal operations
   terminalCreate: (
     id: string,
     cwd?: string
@@ -94,7 +111,7 @@ export interface ElectronAPI {
   onTerminalExit: (callback: (id: string, exitCode: number) => void) => void
 }
 
-// Безопасный API через contextBridge
+// Expose safe API to renderer via contextBridge
 const electronAPI: ElectronAPI = {
   // Window controls
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
@@ -162,6 +179,14 @@ const electronAPI: ElectronAPI = {
   gitPull: (cwd: string) => ipcRenderer.invoke('git-pull', cwd),
   gitAdd: (cwd: string, files: string) => ipcRenderer.invoke('git-add', cwd, files),
   gitReset: (cwd: string, files: string) => ipcRenderer.invoke('git-reset', cwd, files),
+  gitCreateBranch: (cwd: string, branchName: string) =>
+    ipcRenderer.invoke('git-create-branch', cwd, branchName),
+  gitCheckout: (cwd: string, branchName: string) =>
+    ipcRenderer.invoke('git-checkout', cwd, branchName),
+  gitMerge: (cwd: string, branchName: string) => ipcRenderer.invoke('git-merge', cwd, branchName),
+  gitBranchList: (cwd: string) => ipcRenderer.invoke('git-branch-list', cwd),
+  executeCommand: (cwd: string, command: string) =>
+    ipcRenderer.invoke('execute-command', cwd, command),
 
   // File/Folder operations
   createFile: (dirPath: string, fileName: string) =>
@@ -169,8 +194,8 @@ const electronAPI: ElectronAPI = {
   createFolder: (dirPath: string, folderName: string) =>
     ipcRenderer.invoke('create-folder', dirPath, folderName),
   deleteItem: (itemPath: string) => ipcRenderer.invoke('delete-item', itemPath),
-  executeCommand: (cwd: string, command: string) =>
-    ipcRenderer.invoke('execute-command', cwd, command),
+  renameItem: (itemPath: string, newName: string) =>
+    ipcRenderer.invoke('rename-item', itemPath, newName),
 
   // Terminal
   terminalCreate: (id: string, cwd?: string) => ipcRenderer.invoke('terminal-create', id, cwd),
@@ -188,7 +213,7 @@ const electronAPI: ElectronAPI = {
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
 
-// Глобальные типы для TypeScript
+// Global TypeScript types
 declare global {
   interface Window {
     electronAPI: ElectronAPI

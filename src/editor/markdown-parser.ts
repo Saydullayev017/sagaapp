@@ -1,13 +1,13 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-// Configure marked options
+// Configure marked options for GitHub Flavored Markdown
 marked.use({
   gfm: true,
   breaks: true,
 })
 
-// Configure DOMPurify
+// Configure DOMPurify for safe HTML rendering
 const purifyConfig = {
   ALLOWED_TAGS: [
     'p',
@@ -42,7 +42,7 @@ const purifyConfig = {
     'td',
     'div',
     'span',
-    'input', // For checkboxes
+    'input',
   ],
   ALLOWED_ATTR: [
     'href',
@@ -51,27 +51,24 @@ const purifyConfig = {
     'rel',
     'src',
     'alt',
-    'title',
     'class',
     'data-local-path',
     'align',
     'type',
     'checked',
-    'disabled', // For checkboxes
+    'disabled',
   ],
   ALLOW_DATA_ATTR: true,
   SANITIZE_DOM: true,
 }
 
-// Convert markdown to HTML
+/**
+ * Converts markdown content to sanitized HTML
+ */
 export async function parseMarkdown(content: string): Promise<string> {
   try {
-    // Parse markdown to HTML
     const rawHtml = await marked.parse(content)
-
-    // Sanitize HTML
     const cleanHtml = DOMPurify.sanitize(rawHtml, purifyConfig)
-
     return cleanHtml as string
   } catch (error) {
     console.error('Error parsing markdown:', error)
@@ -79,19 +76,22 @@ export async function parseMarkdown(content: string): Promise<string> {
   }
 }
 
-// Escape HTML helper
+/**
+ * Escapes HTML special characters
+ */
 function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
 }
 
-// Process local images
+/**
+ * Processes local images in HTML - marks them for path resolution
+ */
 export function processLocalImages(html: string, _basePath: string): string {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
-  // Process all images
   const images = doc.querySelectorAll('img')
   images.forEach(img => {
     const src = img.getAttribute('src')
@@ -101,7 +101,6 @@ export function processLocalImages(html: string, _basePath: string): string {
         src.startsWith('../') ||
         (!src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('file:')))
     ) {
-      // Mark as local image
       img.setAttribute('data-local-path', src)
       img.classList.add('local-image')
     }
@@ -110,20 +109,22 @@ export function processLocalImages(html: string, _basePath: string): string {
   return doc.body.innerHTML
 }
 
-// Convert local image paths to file:// protocol
+/**
+ * Resolves local image paths to file:// protocol
+ */
 export function resolveLocalImagePath(src: string, basePath: string): string {
   if (src.startsWith('./') || src.startsWith('../')) {
-    // Resolve relative path
     return `file://${basePath}/${src}`
   }
   if (!src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('file:')) {
-    // Assume it's a local file
     return `file://${basePath}/${src}`
   }
   return src
 }
 
-// Get table of contents from markdown
+/**
+ * Extracts table of contents from markdown content
+ */
 export function getTableOfContents(
   content: string
 ): Array<{ level: number; text: string; id: string }> {
@@ -144,21 +145,23 @@ export function getTableOfContents(
   return headings
 }
 
-// Check if content has markdown syntax
+/**
+ * Checks if content contains markdown syntax
+ */
 export function hasMarkdownSyntax(content: string): boolean {
   const markdownPatterns = [
-    /^#{1,6}\s/m, // Headers
-    /\*\*|__/, // Bold
-    /\*|_/, // Italic
-    /`{1,3}/, // Code
-    /\[.+\]\(.+\)/, // Links
-    /!\[.+\]\(.+\)/, // Images
-    /^\s*[-*+]\s/m, // Lists
-    /^\s*\d+\.\s/m, // Numbered lists
-    /^\s*>\s/m, // Blockquotes
-    /^```/m, // Code blocks
-    /^---+$/m, // Horizontal rules
-    /^\|.+\|$/m, // Tables
+    /^#{1,6}\s/m,
+    /\*\*|__/,
+    /\*|_/,
+    /`{1,3}/,
+    /\[.+\]\(.+\)/,
+    /!\[.+\]\(.+\)/,
+    /^\s*[-*+]\s/m,
+    /^\s*\d+\.\s/m,
+    /^\s*>\s/m,
+    /^```/m,
+    /^---+$/m,
+    /^\|.+\|$/m,
   ]
 
   return markdownPatterns.some(pattern => pattern.test(content))

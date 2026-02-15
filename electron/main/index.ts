@@ -2,16 +2,20 @@ import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import { registerIpcHandlers, registerWindowEvents } from './ipc-handlers'
 
-// Импорт для типов Vite (путь относительно файла)
+// Import Vite types
 import '../vite-env.d.ts'
 
-// Регистрация обработчиков IPC
+// Register IPC handlers for main process
 registerIpcHandlers()
 
+// Handle Squirrel events for Windows installer
 if (require('electron-squirrel-startup')) {
   app.quit()
 }
 
+/**
+ * Creates the main application window
+ */
 const createWindow = (): BrowserWindow => {
   const win = new BrowserWindow({
     width: 1200,
@@ -27,15 +31,14 @@ const createWindow = (): BrowserWindow => {
       webSecurity: false,
       allowRunningInsecureContent: true,
     },
-    frame: false,
-    titleBarStyle: 'hidden',
+    frame: true,
     show: true,
   })
 
   win.show()
   win.focus()
 
-  // Обработчики событий загрузки
+  // Handle window load events
   win.webContents.once('did-finish-load', () => {
     console.log('Window finished loading')
     win.show()
@@ -43,21 +46,22 @@ const createWindow = (): BrowserWindow => {
     win.moveTop()
   })
 
-  // Show window immediately and ensure it's visible
+  // Ensure window is shown immediately
   win.once('ready-to-show', () => {
     win.show()
     win.focus()
   })
 
+  // Handle load failures
   win.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
     console.error('Failed to load:', errorCode, errorDescription)
   })
 
-  // Безопасность: предотвращение навигации
+  // Security: prevent navigation to external URLs
   win.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl)
 
-    // Разрешить только dev server и локальные файлы
+    // Allow only dev server and local files
     if (
       (process.env.NODE_ENV === 'development' &&
         parsedUrl.origin.startsWith('http://localhost:')) ||
@@ -69,32 +73,46 @@ const createWindow = (): BrowserWindow => {
     event.preventDefault()
   })
 
-  // Безопасность: предотвращение новых окон
+  // Security: prevent opening new windows
   win.webContents.setWindowOpenHandler(() => {
     return { action: 'deny' }
   })
 
-  // Загружаем production сборку
-  const filePath = path.join(__dirname, '../renderer/index.html')
-  console.log('Loading:', filePath)
-  win.loadFile(filePath)
+  // Load URL based on environment
+  console.log('NODE_ENV:', process.env.NODE_ENV)
+  console.log('VITE_DEV_SERVER_URL:', process.env.VITE_DEV_SERVER_URL)
 
-  // Регистрация событий окна
+  if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
+    // In dev mode, use dev server URL
+    const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
+    console.log('Loading from dev server:', devUrl)
+    win.loadURL(devUrl)
+  } else {
+    // In production, load built file
+    const filePath = path.join(__dirname, '../renderer/index.html')
+    console.log('Loading production build:', filePath)
+    win.loadFile(filePath)
+  }
+
+  // Register window events
   registerWindowEvents(win)
 
   return win
 }
 
+// App is ready - create window
 app.on('ready', () => {
   createWindow()
 })
 
+// Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
+// Recreate window on macOS when dock icon is clicked
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()
