@@ -37,6 +37,8 @@ interface UIState {
   expandedFolders: Set<string>
   sidebarWidth: number
   editorWidth: number
+  outlineWidth: number
+  outlineVisible: boolean
 
   line: number
   column: number
@@ -45,6 +47,10 @@ interface UIState {
   terminalCount: number
   terminals: { [key: string]: { terminal: Terminal; fitAddon: FitAddon } }
   terminalHeight: number
+  gitChanges: {
+    staged: string[]
+    unstaged: string[]
+  }
 }
 
 const state: UIState = {
@@ -53,6 +59,8 @@ const state: UIState = {
   expandedFolders: new Set(),
   sidebarWidth: 280,
   editorWidth: 50,
+  outlineWidth: 220,
+  outlineVisible: false,
 
   line: 1,
   column: 1,
@@ -69,7 +77,11 @@ const state: UIState = {
   activeTerminal: 1,
   terminalCount: 1,
   terminals: {},
-  terminalHeight: 250,
+  terminalHeight: 0,
+  gitChanges: {
+    staged: [],
+    unstaged: [],
+  },
 }
 
 // CodeMirror editor instance
@@ -87,33 +99,6 @@ export function initializeUI(): void {
   if (!app) return
 
   app.innerHTML = `
-    <!-- Custom Titlebar -->
-    <div class="custom-titlebar" id="custom-titlebar">
-      <div class="titlebar-title">
-        <svg class="titlebar-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z"/>
-        </svg>
-        <span>Japp - Markdown Editor</span>
-      </div>
-      <div class="titlebar-controls">
-        <button class="titlebar-btn" id="titlebar-minimize" title="Minimize">
-          <svg viewBox="0 0 10 10" fill="currentColor">
-            <rect x="0" y="4.5" width="10" height="1"/>
-          </svg>
-        </button>
-        <button class="titlebar-btn" id="titlebar-maximize" title="Maximize">
-          <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
-            <rect x="0.5" y="0.5" width="9" height="9"/>
-          </svg>
-        </button>
-        <button class="titlebar-btn close" id="titlebar-close" title="Close">
-          <svg viewBox="0 0 10 10" fill="currentColor">
-            <path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    
     <div class="main-layout">
       <!-- Left Panel: Sidebar -->
       <aside class="sidebar" id="sidebar" style="width: ${state.sidebarWidth}px">
@@ -124,10 +109,65 @@ export function initializeUI(): void {
           </div>
         </div>
         <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="sidebar-actions-bar">
+          <button class="sidebar-action-btn" id="btn-new-file" title="New File">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+          </button>
+          <button class="sidebar-action-btn" id="btn-new-folder" title="New Folder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <line x1="12" y1="11" x2="12" y2="17"></line>
+              <line x1="9" y1="14" x2="15" y2="14"></line>
+            </svg>
+          </button>
+          <button class="sidebar-action-btn" id="btn-open-folder" title="Open Folder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </button>
+          <button class="sidebar-action-btn" id="btn-delete" title="Delete Selected">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+          <button class="sidebar-action-btn" id="btn-rename" title="Rename Selected">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
         <div class="file-tree-search">
           <input type="text" id="tree-search" placeholder="Search files..." />
         </div>
-        <div class="file-tree" id="file-tree"></div>
+        <div class="file-tree" id="file-tree">
+          <div class="sidebar-welcome">
+            <div class="welcome-icon">📝</div>
+            <h3>Welcome to SagaApp</h3>
+            <p>A modern Markdown editor</p>
+            <div class="usage-guide">
+              <h4>Quick Start:</h4>
+              <ul>
+                <li><strong>Open Folder:</strong> Click the folder icon in the toolbar</li>
+                <li><strong>New File:</strong> Click the + button</li>
+                <li><strong>Preview:</strong> Toggle preview mode in toolbar</li>
+              </ul>
+              <h4>Keyboard Shortcuts:</h4>
+              <ul>
+                <li><kbd>Ctrl/Cmd + B</kbd> - Toggle sidebar</li>
+                <li><kbd>Ctrl/Cmd + S</kbd> - Save file</li>
+                <li><kbd>Ctrl/Cmd + P</kbd> - Toggle preview</li>
+                <li><kbd>Ctrl/Cmd + F</kbd> - Search files</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </aside>
       
       <!-- Resize Handle for Sidebar -->
@@ -136,7 +176,23 @@ export function initializeUI(): void {
       <!-- Center Panel: Editor -->
       <main class="editor-container">
         <div class="editor-toolbar">
-          <div class="toolbar-left"></div>
+          <div class="toolbar-left">
+            <button class="toolbar-btn" id="btn-toggle-terminal" title="Toggle Terminal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+              </svg>
+              <span>Terminal</span>
+            </button>
+            <button class="toolbar-btn" id="btn-toggle-outline" title="Toggle Outline">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="15" y2="12"></line>
+                <line x1="3" y1="18" x2="18" y2="18"></line>
+              </svg>
+              <span>Outline</span>
+            </button>
+          </div>
           <div class="toolbar-center"></div>
           <div class="toolbar-right">
             <div class="view-mode-toggle">
@@ -157,8 +213,8 @@ export function initializeUI(): void {
           </div>
 
         <!-- Bottom Panel: Terminal -->
-        <div class="terminal-resize-handle" id="terminal-resize"></div>
-        <div class="bottom-panel" id="bottom-panel">
+        <div class="terminal-resize-handle" id="terminal-resize" style="display: none;"></div>
+        <div class="bottom-panel" id="bottom-panel" style="display: none;">
           <div class="terminal-tabs">
             <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
             <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
@@ -170,6 +226,30 @@ export function initializeUI(): void {
           </div>
         </div>
       </main>
+      
+      <!-- Resize Handle for Outline -->
+      <div class="resize-handle resize-handle-outline" id="resize-outline"></div>
+      
+      <!-- Right Panel: Outline -->
+      <aside class="outline-panel" id="outline-panel">
+        <div class="outline-header">
+          <h3>Outline</h3>
+        </div>
+        <div class="outline-content" id="outline-content">
+          <div class="outline-empty">Open a file to see outline</div>
+        </div>
+        <div class="git-panel">
+          <div class="git-panel-header">
+            <h3>Git</h3>
+            <span class="git-current-branch" id="git-current-branch">-</span>
+          </div>
+          <div class="git-panel-actions">
+            <button class="git-btn" id="git-btn-new-branch">New Branch</button>
+            <button class="git-btn" id="git-btn-commit">Commit</button>
+            <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+          </div>
+        </div>
+      </aside>
     </div>
     
     <!-- Bottom Panel: Git Status Bar -->
@@ -189,6 +269,24 @@ export function initializeUI(): void {
         <span class="status-item" id="status-cursor"></span>
       </div>
     </footer>
+    
+    <!-- Modal Dialog -->
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-title">Create New</h3>
+          <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="text" class="modal-input" id="modal-input" placeholder="Enter name..." />
+          <div class="modal-error" id="modal-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-secondary" id="modal-cancel">Cancel</button>
+          <button class="modal-btn modal-btn-primary" id="modal-confirm">Create</button>
+        </div>
+      </div>
+    </div>
   `
 
   // Загружаем тему
@@ -202,60 +300,41 @@ export function initializeUI(): void {
   setupPasteHandler()
   setupBottomPanel()
   setupTerminal()
+  setupModal()
+  setupOutline()
+  initOutlinePanel()
 
   // Восстанавливаем состояние или открываем дефолтную папку
   setTimeout(async () => {
     const savedState = localStorage.getItem(STORAGE_KEY)
     if (savedState) {
       await restoreState()
-    } else {
-      const defaultPath = '/Volumes/DEV/Japp'
-      state.currentFolder = defaultPath
-      await loadFileTree(defaultPath)
-      updateGitStatus(defaultPath)
-      saveState()
     }
+    // No default folder - show welcome screen
   }, 100)
 }
 
 function setupEventListeners(): void {
-  // Titlebar controls
-  document.getElementById('titlebar-minimize')?.addEventListener('click', () => {
-    window.electronAPI?.minimizeWindow()
-  })
-
-  document.getElementById('titlebar-maximize')?.addEventListener('click', () => {
-    window.electronAPI?.toggleMaximize()
-  })
-
-  document.getElementById('titlebar-close')?.addEventListener('click', () => {
-    window.electronAPI?.closeWindow()
-  })
-
-  // Track maximize state
-  window.electronAPI?.onWindowMaximize(isMaximized => {
-    const maxBtn = document.getElementById('titlebar-maximize')
-    if (maxBtn) {
-      maxBtn.innerHTML = isMaximized
-        ? `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
-            <rect x="2.5" y="0.5" width="7" height="7"/>
-            <path d="M0.5 2.5h7v7h-7z"/>
-          </svg>`
-        : `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
-            <rect x="0.5" y="0.5" width="9" height="9"/>
-          </svg>`
-    }
-  })
-
   // Terminal resize
   setupTerminalResize()
 
-  // Открытие файла
-  document.getElementById('open-file-btn')?.addEventListener('click', openFile)
+  // Sidebar action buttons
+  document.getElementById('btn-new-file')?.addEventListener('click', () => showCreateModal('file'))
+  document
+    .getElementById('btn-new-folder')
+    ?.addEventListener('click', () => showCreateModal('folder'))
+  document.getElementById('btn-open-folder')?.addEventListener('click', openFolderDialog)
+  document.getElementById('btn-delete')?.addEventListener('click', deleteSelectedItem)
+  document.getElementById('btn-rename')?.addEventListener('click', renameSelectedItem)
 
-  // Новый файл/папка
-  document.getElementById('new-file-btn')?.addEventListener('click', createNewFile)
-  document.getElementById('new-folder-btn')?.addEventListener('click', createNewFolder)
+  // Terminal toggle button
+  document.getElementById('btn-toggle-terminal')?.addEventListener('click', toggleTerminal)
+  document.getElementById('btn-toggle-outline')?.addEventListener('click', toggleOutline)
+
+  // Git panel buttons
+  document.getElementById('git-btn-new-branch')?.addEventListener('click', createNewBranch)
+  document.getElementById('git-btn-commit')?.addEventListener('click', showCommitModal)
+  document.getElementById('git-btn-merge')?.addEventListener('click', mergeToDevelop)
 
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
@@ -404,6 +483,42 @@ function setupResizeHandles(): void {
       }
     })
   }
+
+  // Outline panel resize
+  const outlineHandle = document.getElementById('resize-outline')
+  const outlinePanel = document.getElementById('outline-panel')
+
+  if (outlineHandle && outlinePanel) {
+    let isResizing = false
+    let startX = 0
+    let startWidth = 0
+
+    outlineHandle.addEventListener('mousedown', e => {
+      isResizing = true
+      startX = e.clientX
+      startWidth = outlinePanel.offsetWidth
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    })
+
+    document.addEventListener('mousemove', e => {
+      if (!isResizing) return
+      // Calculate max width (half of window)
+      const maxWidth = window.innerWidth / 2
+      const width = Math.max(150, Math.min(maxWidth, startWidth - (e.clientX - startX)))
+      outlinePanel.style.width = `${width}px`
+      state.outlineWidth = width
+    })
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        saveState()
+      }
+    })
+  }
 }
 
 function setupCodeMirrorEditor(): void {
@@ -416,6 +531,7 @@ function setupCodeMirrorEditor(): void {
     debounce(() => {
       updateCursorPosition()
       scheduleAutoSave()
+      updateOutline()
     }, 500)
   )
 }
@@ -500,21 +616,48 @@ function debounce(func: Function, wait: number): (...args: any[]) => void {
   }
 }
 
-async function loadFileTree(folderPath: string): Promise<void> {
+// Generate unique folder ID from path hash
+function getFolderId(path: string): number {
+  let hash = 0
+  for (let i = 0; i < path.length; i++) {
+    const char = path.charCodeAt(i)
+    hash = (hash << 5) - hash + char
+    hash = hash & hash // Convert to 32bit integer
+  }
+  return Math.abs(hash)
+}
+
+// Store all known folder paths for quick lookup
+const allFolderPaths = new Set<string>()
+
+async function loadFileTree(folderPath: string, preserveExpanded: boolean = false): Promise<void> {
   if (!window.electronAPI?.readDirectory) return
+
+  // Clear expanded paths and folder paths only for new root folder
+  if (!preserveExpanded) {
+    state.fileTree.expandedPaths.clear()
+    allFolderPaths.clear()
+  }
 
   const result = await window.electronAPI.readDirectory(folderPath)
   if (result.success && result.entries) {
     state.fileTree.rootPath = folderPath
-    state.fileTree.nodes = result.entries.map((entry: any) => ({
-      name: entry.name,
-      path: entry.path,
-      type: entry.type,
-      extension: entry.extension,
-      size: entry.size,
-      children: undefined,
-      isExpanded: false,
-    }))
+    state.fileTree.nodes = result.entries.map((entry: any) => {
+      // Track all folder paths
+      if (entry.type === 'directory') {
+        allFolderPaths.add(entry.path)
+      }
+      return {
+        name: entry.name,
+        path: entry.path,
+        type: entry.type,
+        extension: entry.extension,
+        size: entry.size,
+      }
+    })
+
+    // Clear expanded paths for new tree
+    state.fileTree.expandedPaths.clear()
 
     updateBreadcrumb(folderPath)
     updateFileCount()
@@ -548,9 +691,14 @@ function renderFileTreeUI(): void {
   const fileTree = document.getElementById('file-tree')
   if (!fileTree) return
 
+  // Show welcome message when no folder is open
+  if (!state.fileTree.rootPath) {
+    return // Keep the welcome HTML from initial template
+  }
+
   const filtered = filterNodes(state.fileTree.nodes)
 
-  if (filtered.length === 0 && state.fileTree.rootPath) {
+  if (filtered.length === 0) {
     fileTree.innerHTML = `
       <div class="empty-state">
         <div class="empty-text">No markdown files found</div>
@@ -576,53 +724,56 @@ function filterNodes(nodes: TreeNode[]): TreeNode[] {
   })
 }
 
-function renderTreeNodes(nodes: TreeNode[], depth: number): string {
+function renderTreeNodes(nodes: TreeNode[], _depth: number): string {
   const sorted = [...nodes].sort((a, b) => {
     if (a.type === b.type) return a.name.localeCompare(b.name)
     return a.type === 'directory' ? -1 : 1
   })
 
-  return sorted
-    .map(node => {
-      const isExpanded = state.fileTree.expandedPaths.has(node.path)
-      const isSelected = state.fileTree.selectedPath === node.path
-      const paddingLeft = 12 + depth * 16
+  let html = ''
 
-      if (node.type === 'directory') {
-        return `
-          <div class="tree-item tree-folder" style="padding-left: ${paddingLeft}px">
-            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
-                 data-path="${node.path}" 
-                 data-type="directory"
-                 style="padding-left: 0">
-              <span class="tree-line"></span>
-              <span class="tree-toggle">${isExpanded ? '-' : '+'}</span>
-              <span class="tree-icon">${isExpanded ? '[+]' : '[·]'}</span>
-              <span class="tree-label">${escapeHtml(node.name)}</span>
-            </div>
-            <div class="tree-children" 
-                 id="folder-${encodePath(node.path)}" 
-                 style="display: ${isExpanded ? 'block' : 'none'}">
-            </div>
+  for (const node of sorted) {
+    const isExpanded = state.fileTree.expandedPaths.has(node.path)
+    const isSelected = state.fileTree.selectedPath === node.path
+
+    if (node.type === 'directory') {
+      // Use path hash as unique folder ID
+      const folderId = getFolderId(node.path)
+
+      html += `
+        <div class="tree-item tree-folder">
+          <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+               data-folder-id="${folderId}" 
+               data-path="${escapeHtml(node.path)}"
+               data-type="directory">
+            <span class="tree-line"></span>
+            <span class="tree-toggle">${isExpanded ? '▼' : '▶'}</span>
+            <span class="tree-icon">${isExpanded ? '📂' : '📁'}</span>
+            <span class="tree-label">${escapeHtml(node.name)}</span>
           </div>
-        `
-      } else {
-        return `
-          <div class="tree-item tree-file" style="padding-left: ${paddingLeft}px">
-            <div class="tree-item-content ${isSelected ? 'active' : ''}" 
-                 data-path="${node.path}" 
-                 data-type="file"
-                 style="padding-left: 0">
-              <span class="tree-line"></span>
-              <span class="tree-toggle" style="visibility: hidden">+</span>
-              <span class="tree-icon">·</span>
-              <span class="tree-label">${escapeHtml(node.name)}</span>
-            </div>
+          <div class="tree-children" 
+               id="folder-children-${folderId}"
+               style="display: ${isExpanded ? 'block' : 'none'}">
           </div>
-        `
-      }
-    })
-    .join('')
+        </div>
+      `
+    } else {
+      html += `
+        <div class="tree-item tree-file">
+          <div class="tree-item-content ${isSelected ? 'active' : ''}" 
+               data-path="${escapeHtml(node.path)}"
+               data-type="file">
+            <span class="tree-line"></span>
+            <span class="tree-toggle" style="visibility: hidden">▶</span>
+            <span class="tree-icon">📄</span>
+            <span class="tree-label">${escapeHtml(node.name)}</span>
+          </div>
+        </div>
+      `
+    }
+  }
+
+  return html
 }
 
 function escapeHtml(text: string): string {
@@ -631,64 +782,67 @@ function escapeHtml(text: string): string {
   return div.innerHTML
 }
 
-function encodePath(path: string): string {
-  return btoa(path).replace(/[^a-zA-Z0-9]/g, '')
-}
-
 function setupFileTreeListeners(): void {
-  // Tree item clicks
-  document.querySelectorAll('.tree-item-content').forEach(item => {
-    item.addEventListener('click', async e => {
-      const target = e.currentTarget as HTMLElement
-      const path = target.dataset.path
-      const type = target.dataset.type
+  const fileTree = document.getElementById('file-tree')
+  if (!fileTree) return
 
-      if (!path) return
+  // Use event delegation - attach one listener to the container
+  fileTree.onclick = async e => {
+    const target = e.target as HTMLElement
+    const itemContent = target.closest('.tree-item-content') as HTMLElement
+    if (!itemContent) return
 
-      // Update selection
-      document.querySelectorAll('.tree-item-content').forEach(el => {
-        el.classList.remove('active')
-      })
-      target.classList.add('active')
-      state.fileTree.selectedPath = path
+    const folderId = itemContent.dataset.folderId
+    const folderPath = itemContent.dataset.path
+    const type = itemContent.dataset.type
 
-      if (type === 'directory') {
-        e.stopPropagation()
-        toggleFolder(path)
-      } else {
-        openFileInEditor(path)
-      }
+    // Update selection
+    document.querySelectorAll('.tree-item-content').forEach(el => {
+      el.classList.remove('active')
     })
-  })
+    itemContent.classList.add('active')
+
+    if (type === 'directory' && folderId && folderPath) {
+      e.stopPropagation()
+      state.fileTree.selectedPath = folderPath
+      await toggleFolder(parseInt(folderId), folderPath)
+    } else if (type === 'file' && folderPath) {
+      state.fileTree.selectedPath = folderPath
+      await openFileInEditor(folderPath)
+    }
+  }
 
   // Search input
   const searchInput = document.getElementById('tree-search') as HTMLInputElement
   if (searchInput) {
-    searchInput.addEventListener(
-      'input',
-      debounce(() => {
-        state.fileTree.filterText = searchInput.value
-        renderFileTreeUI()
-      }, 150)
-    )
+    searchInput.oninput = () => {
+      state.fileTree.filterText = searchInput.value
+      renderFileTreeUI()
+    }
   }
 }
 
-async function toggleFolder(folderPath: string): Promise<void> {
+async function toggleFolder(folderId: number, folderPath: string): Promise<void> {
   const isExpanded = state.fileTree.expandedPaths.has(folderPath)
-  const childrenContainer = document.getElementById(`folder-${encodePath(folderPath)}`)
-  const toggleIcon = document.querySelector(`[data-path="${folderPath}"] .tree-toggle`)
-  const folderIcon = document.querySelector(`[data-path="${folderPath}"] .tree-icon`)
+  const childrenContainer = document.getElementById(`folder-children-${folderId}`)
+
+  // Find the toggle and icon elements
+  const folderItem = childrenContainer?.parentElement
+  const toggleIcon = folderItem?.querySelector('.tree-toggle')
+  const folderIcon = folderItem?.querySelector('.tree-icon')
 
   if (isExpanded) {
+    // Collapse
     state.fileTree.expandedPaths.delete(folderPath)
     if (childrenContainer) childrenContainer.style.display = 'none'
     if (toggleIcon) toggleIcon.textContent = '▶'
     if (folderIcon) folderIcon.textContent = '📁'
   } else {
+    // Expand
     state.fileTree.expandedPaths.add(folderPath)
     if (childrenContainer) {
-      if (!childrenContainer.innerHTML) {
+      // Load children if not already loaded
+      if (!childrenContainer.innerHTML.trim()) {
         await loadFolderContents(folderPath, childrenContainer)
       }
       childrenContainer.style.display = 'block'
@@ -703,68 +857,23 @@ async function loadFolderContents(folderPath: string, container: HTMLElement): P
 
   const result = await window.electronAPI.readDirectory(folderPath)
   if (result.success && result.entries) {
-    const nodes: TreeNode[] = result.entries.map((entry: any) => ({
-      name: entry.name,
-      path: entry.path,
-      type: entry.type,
-      extension: entry.extension,
-      size: entry.size,
-    }))
+    const nodes: TreeNode[] = result.entries.map((entry: any) => {
+      // Track all folder paths for quick lookup
+      if (entry.type === 'directory') {
+        allFolderPaths.add(entry.path)
+      }
+      return {
+        name: entry.name,
+        path: entry.path,
+        type: entry.type,
+        extension: entry.extension,
+        size: entry.size,
+      }
+    })
+
+    // Render children at depth 1
     container.innerHTML = renderTreeNodes(nodes, 1)
     setupFileTreeListeners()
-  }
-}
-
-async function createNewFile(): Promise<void> {
-  if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
-    return
-  }
-
-  const fileName = prompt('Enter file name:', 'untitled.md')
-  if (!fileName) return
-
-  console.log('Creating file:', state.currentFolder, fileName)
-  const result = await window.electronAPI?.createFile(state.currentFolder, fileName)
-  console.log('Create file result:', result)
-  if (result?.success) {
-    showNotification('File created', 'success')
-    loadFileTree(state.currentFolder)
-  } else {
-    showNotification(result?.error || 'Failed to create file', 'error')
-  }
-}
-
-async function createNewFolder(): Promise<void> {
-  if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
-    return
-  }
-
-  const folderName = prompt('Enter folder name:', 'new-folder')
-  if (!folderName) return
-
-  console.log('Creating folder:', state.currentFolder, folderName)
-  const result = await window.electronAPI?.createFolder(state.currentFolder, folderName)
-  console.log('Create folder result:', result)
-  if (result?.success) {
-    showNotification('Folder created', 'success')
-    loadFileTree(state.currentFolder)
-  } else {
-    showNotification(result?.error || 'Failed to create folder', 'error')
-  }
-}
-
-async function openFile(): Promise<void> {
-  if (!window.electronAPI?.showOpenDialog) return
-
-  const result = await window.electronAPI.showOpenDialog({
-    properties: ['openFile'],
-    filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
-  })
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    await openFileInEditor(result.filePaths[0])
   }
 }
 
@@ -1074,42 +1183,6 @@ async function unstageFile(filePath: string): Promise<void> {
   updateGitStatus(state.currentFolder)
 }
 
-async function stageAllFiles(): Promise<void> {
-  if (!state.currentFolder) return
-  await window.electronAPI?.gitAdd(state.currentFolder, '.')
-  await refreshGitChanges()
-  updateGitStatus(state.currentFolder)
-}
-
-async function unstageAllFiles(): Promise<void> {
-  if (!state.currentFolder) return
-  await window.electronAPI?.gitReset(state.currentFolder, '.')
-  await refreshGitChanges()
-  updateGitStatus(state.currentFolder)
-}
-
-async function commitChanges(): Promise<void> {
-  const commitInput = document.getElementById('git-commit-message') as HTMLTextAreaElement
-  const message = commitInput?.value.trim()
-
-  if (!message) {
-    showNotification('Enter commit message', 'error')
-    return
-  }
-
-  if (!state.currentFolder) return
-
-  const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
-  if (result?.success) {
-    showNotification('Committed successfully', 'success')
-    commitInput.value = ''
-    await refreshGitChanges()
-    updateGitStatus(state.currentFolder)
-  } else {
-    showNotification(result?.error || 'Commit failed', 'error')
-  }
-}
-
 function setupDragDrop(): void {
   const editorPane = document.getElementById('editor-pane')
   if (!editorPane) return
@@ -1214,6 +1287,7 @@ function setupPasteHandler(): void {
 
 async function updateGitStatus(folderPath: string): Promise<void> {
   const statusGit = document.getElementById('status-git')
+  const gitCurrentBranch = document.getElementById('git-current-branch')
   if (!statusGit || !folderPath) return
 
   try {
@@ -1222,7 +1296,7 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       window.electronAPI?.gitStatus(folderPath),
     ])
 
-    const branch = branchResult?.success ? branchResult.branch : 'No repo'
+    const branch = branchResult?.success && branchResult.branch ? branchResult.branch : 'No repo'
     const files = statusResult?.success && statusResult.isRepo ? statusResult.files || [] : []
     const changedCount = files.length
 
@@ -1231,12 +1305,20 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       <span class="git-changes">${changedCount} changes</span>
     `
 
+    // Update git panel branch display
+    if (gitCurrentBranch) {
+      gitCurrentBranch.textContent = branch
+    }
+
     await refreshGitChanges()
   } catch {
     statusGit.innerHTML = `
       <span class="git-branch">Not a git repo</span>
       <span class="git-changes"></span>
     `
+    if (gitCurrentBranch) {
+      gitCurrentBranch.textContent = '-'
+    }
   }
 }
 
@@ -1291,7 +1373,13 @@ function setupTerminal(): void {
 
 async function createTerminal(id: number): Promise<void> {
   const container = document.getElementById(`terminal-container-${id}`)
-  if (!container || state.terminals[String(id)]) return
+  if (!container) {
+    console.error('[Terminal] Container not found!')
+    return
+  }
+  if (state.terminals[String(id)]) {
+    return
+  }
 
   const terminal = new Terminal({
     cursorBlink: true,
@@ -1319,8 +1407,14 @@ async function createTerminal(id: number): Promise<void> {
     window.electronAPI?.terminalInput(String(id), data)
   })
 
-  const cwd = state.currentFolder || process.env.HOME || '/'
-  await window.electronAPI?.terminalCreate(String(id), cwd)
+  const cwd = state.currentFolder || '/Users/javlonbeksaydullaev'
+  console.log('[Terminal] Creating PTY with cwd:', cwd)
+  try {
+    const result = await window.electronAPI?.terminalCreate(String(id), cwd)
+    console.log('[Terminal] PTY created:', result)
+  } catch (err) {
+    console.error('[Terminal] Error creating PTY:', err)
+  }
 
   setTimeout(() => {
     fitAddon.fit()
@@ -1381,5 +1475,503 @@ function setupTerminalResize(): void {
       bottomPanel.style.height = `${height}px`
       state.terminalHeight = height
     }
+  }
+}
+
+// Modal Dialog Functions
+let modalCallback: ((value: string | null) => void) | null = null
+let modalType: 'file' | 'folder' | 'commit' | 'branch' = 'file'
+
+function setupModal(): void {
+  const overlay = document.getElementById('modal-overlay')
+  const closeBtn = document.getElementById('modal-close')
+  const cancelBtn = document.getElementById('modal-cancel')
+  const confirmBtn = document.getElementById('modal-confirm')
+  const input = document.getElementById('modal-input') as HTMLInputElement
+
+  const closeModal = () => {
+    if (overlay) overlay.classList.remove('active')
+    if (input) input.value = ''
+    if (modalCallback) modalCallback(null)
+    modalCallback = null
+  }
+
+  closeBtn?.addEventListener('click', closeModal)
+  cancelBtn?.addEventListener('click', closeModal)
+
+  confirmBtn?.addEventListener('click', () => {
+    if (input && modalCallback) {
+      const value = input.value.trim()
+      if (value) {
+        modalCallback(value)
+        closeModal()
+      } else {
+        showModalError('Please enter a name')
+      }
+    }
+  })
+
+  input?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      confirmBtn?.click()
+    } else if (e.key === 'Escape') {
+      closeModal()
+    }
+  })
+
+  overlay?.addEventListener('click', e => {
+    if (e.target === overlay) closeModal()
+  })
+}
+
+function showModal(
+  title: string,
+  placeholder: string,
+  type: typeof modalType
+): Promise<string | null> {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('modal-overlay')
+    const titleEl = document.getElementById('modal-title')
+    const input = document.getElementById('modal-input') as HTMLInputElement
+    const confirmBtn = document.getElementById('modal-confirm')
+
+    modalType = type
+    modalCallback = resolve
+
+    if (titleEl) titleEl.textContent = title
+    if (input) {
+      input.placeholder = placeholder
+      input.value = ''
+    }
+    if (confirmBtn) confirmBtn.textContent = type === 'commit' ? 'Commit' : 'Create'
+
+    clearModalError()
+    overlay?.classList.add('active')
+    setTimeout(() => input?.focus(), 100)
+  })
+}
+
+function showModalError(message: string): void {
+  const errorEl = document.getElementById('modal-error')
+  if (errorEl) {
+    errorEl.textContent = message
+    errorEl.classList.add('active')
+  }
+}
+
+function clearModalError(): void {
+  const errorEl = document.getElementById('modal-error')
+  if (errorEl) {
+    errorEl.textContent = ''
+    errorEl.classList.remove('active')
+  }
+}
+
+// Get parent folder path from any file or folder path
+function getParentFolder(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  const lastSlash = normalized.lastIndexOf('/')
+  if (lastSlash <= 0) return '/'
+  return normalized.substring(0, lastSlash)
+}
+
+async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('Please open a folder first', 'error')
+    return
+  }
+
+  // Use selected folder if it's a directory, otherwise find parent folder
+  let targetFolder = state.currentFolder
+  if (state.fileTree.selectedPath) {
+    // Check if selected path is a known directory (including nested)
+    if (allFolderPaths.has(state.fileTree.selectedPath)) {
+      // It's a directory - create inside it
+      targetFolder = state.fileTree.selectedPath
+    } else {
+      // It's a file or unknown - get parent folder
+      targetFolder = getParentFolder(state.fileTree.selectedPath)
+
+      // Normalize and validate
+      if (!targetFolder || targetFolder === state.currentFolder) {
+        targetFolder = state.currentFolder
+      }
+    }
+  }
+
+  const folderName = targetFolder.split(/[/\\]/).pop() || targetFolder
+  const title =
+    type === 'file' ? `Create New File in "${folderName}"` : `Create New Folder in "${folderName}"`
+  const placeholder = type === 'file' ? 'Enter file name (e.g., document.md)' : 'Enter folder name'
+  const name = await showModal(title, placeholder, type)
+
+  if (!name) return
+
+  // Auto-add .md extension for files - always force .md
+  let finalName = name
+  if (type === 'file') {
+    // Remove any existing extension and force .md
+    const nameWithoutExt = name.replace(/\.[^.]+$/, '')
+    finalName = nameWithoutExt + '.md'
+  }
+
+  try {
+    let result
+    if (type === 'file') {
+      result = await window.electronAPI?.createFile(targetFolder, finalName)
+    } else {
+      result = await window.electronAPI?.createFolder(targetFolder, name)
+    }
+
+    if (result?.success) {
+      // For files, get the full path and open in editor
+      if (type === 'file' && result.path) {
+        const createdFilePath = result.path
+        showNotification(`File created successfully in "${folderName}"`, 'success')
+
+        // Select and open the file
+        state.fileTree.selectedPath = createdFilePath
+        await loadFileTree(state.currentFolder, true)
+        await openFileInEditor(createdFilePath)
+      } else {
+        showNotification(
+          `${type === 'file' ? 'File' : 'Folder'} created successfully in "${folderName}"`,
+          'success'
+        )
+
+        // Refresh the tree and expand the target folder if needed
+        if (targetFolder !== state.currentFolder) {
+          state.fileTree.expandedPaths.add(targetFolder)
+        }
+        await loadFileTree(state.currentFolder, true)
+      }
+    } else {
+      showNotification(result?.error || `Failed to create ${type}`, 'error')
+    }
+  } catch (error) {
+    showNotification(`Error creating ${type}`, 'error')
+  }
+}
+
+async function openFolderDialog(): Promise<void> {
+  const result = await window.electronAPI?.showOpenDialog({
+    properties: ['openDirectory'],
+  })
+
+  if (!result?.canceled && result?.filePaths.length > 0) {
+    const folderPath = result.filePaths[0]
+    state.currentFolder = folderPath
+    await loadFileTree(folderPath)
+    updateGitStatus(folderPath)
+    saveState()
+  }
+}
+
+async function deleteSelectedItem(): Promise<void> {
+  const selectedPath = state.fileTree.selectedPath
+  if (!selectedPath) {
+    showNotification('Please select a file or folder to delete', 'error')
+    return
+  }
+
+  const itemName = selectedPath.split('/').pop() || selectedPath.split('\\').pop() || selectedPath
+  const confirmed = confirm(`Are you sure you want to delete "${itemName}"?`)
+
+  if (!confirmed) return
+
+  try {
+    const result = await window.electronAPI?.deleteItem(selectedPath)
+    if (result?.success) {
+      showNotification('Item deleted successfully', 'success')
+      if (state.currentFolder) {
+        await loadFileTree(state.currentFolder, true)
+      }
+      if (state.currentFile === selectedPath) {
+        state.currentFile = null
+        if (cmEditor) {
+          setEditorContent(cmEditor, '')
+        }
+        const statusFile = document.getElementById('status-file')
+        if (statusFile) statusFile.textContent = 'No file opened'
+      }
+    } else {
+      showNotification(result?.error || 'Failed to delete item', 'error')
+    }
+  } catch (error) {
+    showNotification('Error deleting item', 'error')
+  }
+}
+
+async function renameSelectedItem(): Promise<void> {
+  const selectedPath = state.fileTree.selectedPath
+  if (!selectedPath) {
+    showNotification('Please select a file or folder to rename', 'error')
+    return
+  }
+
+  const itemName = selectedPath.split('/').pop() || selectedPath.split('\\').pop() || selectedPath
+  const newName = await showModal('Rename Item', `Enter new name for "${itemName}"`, 'file')
+
+  if (!newName || newName === itemName) return
+
+  try {
+    const result = await window.electronAPI?.renameItem(selectedPath, newName)
+    if (result?.success && result.newPath) {
+      showNotification('Item renamed successfully', 'success')
+
+      // Update current file if it was renamed
+      if (state.currentFile === selectedPath) {
+        state.currentFile = result.newPath
+        const statusFile = document.getElementById('status-file')
+        if (statusFile) statusFile.textContent = newName
+      }
+
+      // Refresh the file tree
+      if (state.currentFolder) {
+        await loadFileTree(state.currentFolder, true)
+      }
+    } else {
+      showNotification(result?.error || 'Failed to rename item', 'error')
+    }
+  } catch (error) {
+    showNotification('Error renaming item', 'error')
+  }
+}
+
+// Terminal Toggle
+function toggleTerminal(): void {
+  const bottomPanel = document.getElementById('bottom-panel')
+  const terminalResizeHandle = document.getElementById('terminal-resize')
+  const btn = document.getElementById('btn-toggle-terminal')
+
+  if (!bottomPanel) return
+
+  const isVisible = bottomPanel.style.display !== 'none'
+
+  if (isVisible) {
+    bottomPanel.style.display = 'none'
+    if (terminalResizeHandle) terminalResizeHandle.style.display = 'none'
+    btn?.classList.remove('active')
+  } else {
+    bottomPanel.style.display = 'flex'
+    if (terminalResizeHandle) terminalResizeHandle.style.display = 'block'
+    btn?.classList.add('active')
+    // Fit terminal after showing
+    setTimeout(() => {
+      const activeTerm = state.terminals[String(state.activeTerminal)]
+      if (activeTerm) {
+        activeTerm.fitAddon.fit()
+      }
+    }, 100)
+  }
+}
+
+function toggleOutline(): void {
+  const outlinePanel = document.getElementById('outline-panel')
+  const resizeHandle = document.getElementById('resize-outline')
+  const btn = document.getElementById('btn-toggle-outline')
+
+  if (!outlinePanel) return
+
+  state.outlineVisible = !state.outlineVisible
+
+  if (state.outlineVisible) {
+    outlinePanel.style.display = 'flex'
+    if (resizeHandle) resizeHandle.style.display = 'block'
+    btn?.classList.add('active')
+  } else {
+    outlinePanel.style.display = 'none'
+    if (resizeHandle) resizeHandle.style.display = 'none'
+    btn?.classList.remove('active')
+  }
+
+  saveState()
+}
+
+// Initialize outline visibility
+function initOutlinePanel(): void {
+  const outlinePanel = document.getElementById('outline-panel')
+  const resizeHandle = document.getElementById('resize-outline')
+  const btn = document.getElementById('btn-toggle-outline')
+
+  if (outlinePanel && resizeHandle) {
+    if (state.outlineVisible) {
+      outlinePanel.style.display = 'flex'
+      resizeHandle.style.display = 'block'
+      btn?.classList.add('active')
+    } else {
+      outlinePanel.style.display = 'none'
+      resizeHandle.style.display = 'none'
+      btn?.classList.remove('active')
+    }
+  }
+}
+
+// Outline Functions
+function updateOutline(): void {
+  const outlineContent = document.getElementById('outline-content')
+  if (!outlineContent || !cmEditor) return
+
+  const content = getEditorContent(cmEditor)
+  const lines = content.split('\n')
+  const headings: Array<{ level: number; text: string; line: number }> = []
+
+  lines.forEach((line, index) => {
+    const match = line.match(/^(#{1,6})\s+(.+)$/)
+    if (match) {
+      headings.push({
+        level: match[1].length,
+        text: match[2].trim(),
+        line: index,
+      })
+    }
+  })
+
+  if (headings.length === 0) {
+    outlineContent.innerHTML = '<div class="outline-empty">No headings found</div>'
+    return
+  }
+
+  const getHeadingIcon = (level: number): string => {
+    const icons: Record<number, string> = { 1: 'H1', 2: 'H2', 3: 'H3', 4: 'H4', 5: 'H5', 6: 'H6' }
+    return icons[level] || 'H'
+  }
+
+  // Build HTML
+  outlineContent.innerHTML = headings
+    .map(heading => {
+      return `
+        <div class="outline-item outline-level-${heading.level}" data-line="${heading.line}">
+          <span class="outline-icon">${getHeadingIcon(heading.level)}</span>
+          <span class="outline-text">${escapeHtml(heading.text)}</span>
+        </div>
+      `
+    })
+    .join('')
+
+  // Add click handlers
+  outlineContent.querySelectorAll('.outline-item').forEach(item => {
+    item.addEventListener('click', () => {
+      // Remove active from all
+      outlineContent.querySelectorAll('.outline-item').forEach(el => el.classList.remove('active'))
+      // Add active to clicked
+      item.classList.add('active')
+
+      const line = parseInt((item as HTMLElement).dataset.line || '0')
+      if (cmEditor) {
+        const pos = cmEditor.state.doc.line(line + 1).from
+        cmEditor.dispatch({
+          selection: { anchor: pos },
+          scrollIntoView: true,
+        })
+        cmEditor.focus()
+      }
+    })
+  })
+}
+
+function setupOutline(): void {
+  // Outline is updated via the debounced callback in setupCodeMirrorEditor
+  // This function is kept for potential future extensions
+}
+
+// Git Workflow Functions
+async function createNewBranch(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('Please open a folder first', 'error')
+    return
+  }
+
+  const branchName = await showModal('Create New Branch', 'Enter branch name', 'branch')
+  if (!branchName) return
+
+  try {
+    const result = await window.electronAPI?.gitCreateBranch(state.currentFolder, branchName)
+    if (result?.success) {
+      showNotification(`Branch "${branchName}" created and checked out`, 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotification(result?.error || 'Failed to create branch', 'error')
+    }
+  } catch (error) {
+    showNotification('Error creating branch', 'error')
+  }
+}
+
+async function showCommitModal(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('Please open a folder first', 'error')
+    return
+  }
+
+  const message = await showModal('Commit Changes', 'Enter commit message', 'commit')
+  if (!message) return
+
+  try {
+    // First stage all changes
+    const addResult = await window.electronAPI?.gitAdd(state.currentFolder, '.')
+    if (!addResult?.success) {
+      showNotification(addResult?.error || 'Failed to stage changes', 'error')
+      return
+    }
+
+    // Then commit
+    const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
+    if (result?.success) {
+      showNotification('Changes committed successfully', 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotification(result?.error || 'Failed to commit', 'error')
+    }
+  } catch (error) {
+    showNotification('Error committing changes', 'error')
+  }
+}
+
+async function mergeToDevelop(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotification('Please open a folder first', 'error')
+    return
+  }
+
+  try {
+    // Get current branch
+    const branchResult = await window.electronAPI?.gitBranch(state.currentFolder)
+    if (!branchResult?.success || !branchResult.branch) {
+      showNotification('Failed to get current branch', 'error')
+      return
+    }
+
+    const currentBranch = branchResult.branch
+
+    if (currentBranch === 'develop') {
+      showNotification('Already on develop branch', 'error')
+      return
+    }
+
+    const confirmed = confirm(`Merge branch "${currentBranch}" into "develop"?`)
+    if (!confirmed) return
+
+    // Checkout develop
+    const checkoutResult = await window.electronAPI?.gitCheckout(state.currentFolder, 'develop')
+    if (!checkoutResult?.success) {
+      // Try to create develop if it doesn't exist
+      const createResult = await window.electronAPI?.gitCreateBranch(state.currentFolder, 'develop')
+      if (!createResult?.success) {
+        showNotification(checkoutResult?.error || 'Failed to checkout develop', 'error')
+        return
+      }
+    }
+
+    // Merge current branch
+    const mergeResult = await window.electronAPI?.gitMerge(state.currentFolder, currentBranch)
+    if (mergeResult?.success) {
+      showNotification(`Successfully merged "${currentBranch}" into "develop"`, 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotification(mergeResult?.error || 'Merge failed', 'error')
+    }
+  } catch (error) {
+    showNotification('Error during merge', 'error')
   }
 }

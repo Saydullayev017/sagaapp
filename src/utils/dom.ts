@@ -1,3 +1,10 @@
+/**
+ * DOM utility functions
+ */
+
+/**
+ * Creates an HTML element with optional className and textContent
+ */
 export function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
   className?: string,
@@ -9,6 +16,11 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
   return element
 }
 
+/**
+ * Debounce function - delays execution until after wait milliseconds
+ * @param func - Function to debounce
+ * @param wait - Milliseconds to wait before execution
+ */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
@@ -20,6 +32,11 @@ export function debounce<T extends (...args: any[]) => any>(
   }
 }
 
+/**
+ * Shows a notification message on screen
+ * @param message - Message to display
+ * @param type - Type of notification (info, success, error)
+ */
 export function showNotification(
   message: string,
   type: 'info' | 'success' | 'error' = 'info'

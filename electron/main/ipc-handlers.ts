@@ -7,29 +7,27 @@ import * as pty from 'node-pty'
 
 const execAsync = promisify(exec)
 
-// Валидация путей для безопасности
+// Path validation for security - prevents access to sensitive system directories
 const validatePath = (filePath: string): boolean => {
-  // Базовая проверка на опасные пути
   const dangerousPatterns = [
-    /\.\./, // Родительские директории
-    /^\/(etc|usr|bin|sbin|var|sys|proc)\//, // Системные директории
-    /^[A-Za-z]:\\(Windows|Program Files|System32)/, // Windows системные пути
+    /\.\./, // Parent directory traversal
+    /^\/(etc|usr|bin|sbin|var|sys|proc)\//, // System directories
+    /^[A-Za-z]:\\(Windows|Program Files|System32)/, // Windows system paths
   ]
-
   return !dangerousPatterns.some(pattern => pattern.test(filePath))
 }
 
-// Безопасное получение окна
+// Get BrowserWindow from IPC event sender
 const getSenderWindow = (
   event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
 ): BrowserWindow | null => {
   return BrowserWindow.fromWebContents(event.sender)
 }
 
-// Map to store active PTY sessions
+// Map to store active PTY (terminal) sessions
 const ptySessions = new Map<string, pty.IPty>()
 
-// Get shell based on platform
+// Get default shell based on platform
 const getShell = (): string => {
   if (process.platform === 'win32') {
     return process.env.COMSPEC || 'cmd.exe'
@@ -37,8 +35,11 @@ const getShell = (): string => {
   return process.env.SHELL || '/bin/bash'
 }
 
+/**
+ * Register all IPC handlers for main process communication
+ */
 export const registerIpcHandlers = () => {
-  // Window controls с улучшенной безопасностью
+  // Window control handlers
   ipcMain.on('window-minimize', event => {
     const window = getSenderWindow(event)
     if (window && !window.isDestroyed()) {
@@ -64,15 +65,13 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // File system handlers с валидацией безопасности
+  // File system handlers
   ipcMain.handle('read-file', async (_event, filePath: string) => {
     try {
-      // Валидация пути
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
 
-      // Проверка существования файла
       const stats = await fs.stat(filePath).catch(() => null)
       if (!stats || !stats.isFile()) {
         return { success: false, error: 'File not found' }
@@ -87,15 +86,12 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
     try {
-      // Валидация пути
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
 
-      // Проверка размера контента
       if (content.length > 10 * 1024 * 1024) {
-        // 10MB лимит
-        return { success: false, error: 'File too large' }
+        return { success: false, error: 'File too large (max 10MB)' }
       }
 
       await fs.writeFile(filePath, content, 'utf-8')
@@ -107,19 +103,19 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('read-directory', async (_event, dirPath: string) => {
     try {
-      // Валидация пути
       if (!validatePath(dirPath)) {
         return { success: false, error: 'Invalid directory path' }
       }
 
-      // Проверка существования директории
       const stats = await fs.stat(dirPath).catch(() => null)
       if (!stats || !stats.isDirectory()) {
         return { success: false, error: 'Directory not found' }
       }
 
       const entries = await fs.readdir(dirPath, { withFileTypes: true })
-      const result = entries.map(entry => ({
+      // Filter out hidden files and folders (starting with .)
+      const visibleEntries = entries.filter(entry => !entry.name.startsWith('.'))
+      const result = visibleEntries.map(entry => ({
         name: entry.name,
         path: path.join(dirPath, entry.name),
         type: entry.isDirectory() ? 'directory' : 'file',
@@ -132,7 +128,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // Dialog handlers с улучшенной типизацией
+  // Dialog handlers
   ipcMain.handle('show-open-dialog', async (event, options: Electron.OpenDialogOptions) => {
     const window = getSenderWindow(event)
     if (!window || window.isDestroyed()) {
@@ -161,7 +157,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // App info с большей информацией
+  // App info handlers
   ipcMain.handle('get-app-version', () => {
     return app.getVersion() || process.env.npm_package_version || '1.0.0'
   })
@@ -178,7 +174,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // Дополнительные полезные обработчики
+  // Get system paths handler
   ipcMain.handle('get-path', async (_event, name: string) => {
     try {
       const userPath = app.getPath(name as any)
@@ -188,6 +184,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Check if running in development mode
   ipcMain.handle('is-dev', () => {
     return process.env.NODE_ENV === 'development'
   })
@@ -275,9 +272,56 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // File/Folder creation
+  // Git branch operations
+  ipcMain.handle('git-create-branch', async (_event, cwd: string, branchName: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(
+        `git checkout -b "${branchName.replace(/"/g, '\\"')}"`,
+        { cwd }
+      )
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
 
-  // File/Folder creation
+  ipcMain.handle('git-checkout', async (_event, cwd: string, branchName: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(
+        `git checkout "${branchName.replace(/"/g, '\\"')}"`,
+        { cwd }
+      )
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-merge', async (_event, cwd: string, branchName: string) => {
+    try {
+      const { stdout, stderr } = await execAsync(`git merge "${branchName.replace(/"/g, '\\"')}"`, {
+        cwd,
+      })
+      return { success: true, output: stdout || stderr }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('git-branch-list', async (_event, cwd: string) => {
+    try {
+      const { stdout } = await execAsync('git branch -a', { cwd })
+      const branches = stdout
+        .trim()
+        .split('\n')
+        .map(b => b.trim().replace(/^\*\s*/, ''))
+      return { success: true, branches }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // File/Folder creation handlers
   ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
     try {
       const filePath = path.join(dirPath, fileName)
@@ -312,6 +356,18 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  ipcMain.handle('rename-item', async (_event, itemPath: string, newName: string) => {
+    try {
+      const parentDir = path.dirname(itemPath)
+      const newPath = path.join(parentDir, newName)
+      await fs.rename(itemPath, newPath)
+      return { success: true, newPath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Execute custom shell command
   ipcMain.handle('execute-command', async (_event, cwd: string, command: string) => {
     try {
       const { exec } = require('child_process')
@@ -329,7 +385,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
-  // Terminal PTY handlers
+  // Terminal PTY handlers - for embedded terminal
   ipcMain.handle('terminal-create', async (event, id: string, cwd?: string) => {
     try {
       const shell = getShell()
@@ -345,6 +401,7 @@ export const registerIpcHandlers = () => {
 
       ptySessions.set(id, ptyProcess)
 
+      // Send terminal output to renderer
       ptyProcess.onData(data => {
         const window = BrowserWindow.fromWebContents(event.sender)
         if (window && !window.isDestroyed()) {
@@ -352,6 +409,7 @@ export const registerIpcHandlers = () => {
         }
       })
 
+      // Handle terminal exit
       ptyProcess.onExit(({ exitCode }) => {
         ptySessions.delete(id)
         const window = BrowserWindow.fromWebContents(event.sender)
@@ -366,6 +424,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Handle terminal input from renderer
   ipcMain.on('terminal-input', (_event, id: string, data: string) => {
     const ptyProcess = ptySessions.get(id)
     if (ptyProcess) {
@@ -373,6 +432,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Handle terminal resize
   ipcMain.on('terminal-resize', (_event, id: string, cols: number, rows: number) => {
     const ptyProcess = ptySessions.get(id)
     if (ptyProcess) {
@@ -380,6 +440,7 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Kill terminal session
   ipcMain.handle('terminal-kill', async (_event, id: string) => {
     try {
       const ptyProcess = ptySessions.get(id)
@@ -394,9 +455,11 @@ export const registerIpcHandlers = () => {
   })
 }
 
-// Регистрация событий окна
+/**
+ * Register window event handlers to communicate with renderer
+ */
 export const registerWindowEvents = (window: BrowserWindow) => {
-  // События изменения состояния окна
+  // Window state events
   window.on('minimize', () => {
     window.webContents.send('window-minimized')
   })
@@ -417,6 +480,7 @@ export const registerWindowEvents = (window: BrowserWindow) => {
     window.webContents.send('window-blurred')
   })
 
+  // Window size/position events
   window.on('resize', () => {
     const [width, height] = window.getContentSize()
     window.webContents.send('window-resized', width, height)

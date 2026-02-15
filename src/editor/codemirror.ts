@@ -100,7 +100,12 @@ const customTheme = EditorView.theme(
   { dark: true }
 )
 
-// Export function to create editor
+/**
+ * Creates a CodeMirror editor instance
+ * @param parent - HTML element to attach editor
+ * @param initialContent - Initial content to display
+ * @param onChange - Callback when content changes
+ */
 export function createCodeMirrorEditor(
   parent: HTMLElement,
   initialContent: string = '',
@@ -118,7 +123,7 @@ export function createCodeMirrorEditor(
 
   const view = new EditorView({
     state: EditorState.create({
-      doc: initialContent || '\n', // Start with empty line to fix cursor size
+      doc: initialContent || '\n',
       extensions: [
         // Basic setup
         history(),
@@ -139,8 +144,6 @@ export function createCodeMirrorEditor(
 
         // Line wrapping
         EditorView.lineWrapping,
-
-        // No placeholder to avoid large cursor issue
       ],
     }),
     parent,
@@ -149,12 +152,16 @@ export function createCodeMirrorEditor(
   return view
 }
 
-// Export function to get editor content
+/**
+ * Gets the current content from the editor
+ */
 export function getEditorContent(view: EditorView): string {
   return view.state.doc.toString()
 }
 
-// Export function to set editor content
+/**
+ * Sets the content of the editor
+ */
 export function setEditorContent(view: EditorView, content: string): void {
   view.dispatch({
     changes: {
@@ -165,7 +172,9 @@ export function setEditorContent(view: EditorView, content: string): void {
   })
 }
 
-// Export function to get cursor position
+/**
+ * Gets the current cursor position
+ */
 export function getCursorPosition(view: EditorView): { line: number; column: number } {
   const pos = view.state.selection.main.head
   const line = view.state.doc.lineAt(pos)
@@ -175,7 +184,9 @@ export function getCursorPosition(view: EditorView): { line: number; column: num
   }
 }
 
-// Export function to focus editor
+/**
+ * Focuses the editor
+ */
 export function focusEditor(view: EditorView): void {
   view.focus()
 }
