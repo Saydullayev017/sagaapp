@@ -109,6 +109,34 @@ export interface ElectronAPI {
   terminalKill: (id: string) => Promise<{ success: boolean; error?: string }>
   onTerminalData: (callback: (id: string, data: string) => void) => void
   onTerminalExit: (callback: (id: string, exitCode: number) => void) => void
+
+  // Code execution
+  executeCode: (
+    language: string,
+    code: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+
+  // Language detection and installation
+  checkLanguages: () => Promise<{
+    success: boolean
+    languages?: Array<{
+      id: string
+      name: string
+      installed: boolean
+      version?: string
+      icon: string
+    }>
+    error?: string
+  }>
+  installLanguage: (
+    langId: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  uninstallLanguage: (
+    langId: string
+  ) => Promise<{ success: boolean; output?: string; error?: string }>
+  checkLanguage: (
+    langId: string
+  ) => Promise<{ success: boolean; path?: string; fixed?: boolean; error?: string }>
 }
 
 // Expose safe API to renderer via contextBridge
@@ -209,6 +237,16 @@ const electronAPI: ElectronAPI = {
   onTerminalExit: (callback: (id: string, exitCode: number) => void) => {
     ipcRenderer.on('terminal-exit', (_, id, exitCode) => callback(id, exitCode))
   },
+
+  // Code execution
+  executeCode: (language: string, code: string) =>
+    ipcRenderer.invoke('execute-code', language, code),
+
+  // Language detection and installation
+  checkLanguages: () => ipcRenderer.invoke('check-languages'),
+  installLanguage: (langId: string) => ipcRenderer.invoke('install-language', langId),
+  uninstallLanguage: (langId: string) => ipcRenderer.invoke('uninstall-language', langId),
+  checkLanguage: (langId: string) => ipcRenderer.invoke('check-language', langId),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)
