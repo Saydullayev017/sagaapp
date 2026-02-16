@@ -97,10 +97,6 @@ const customTheme = EditorView.theme(
       borderRadius: '4px',
       padding: '2px 8px',
     },
-    // Code block styling in editor
-    '.cm-line': {
-      padding: '0 4px',
-    },
     // Scrollbar styling
     '&.cm-editor ::-webkit-scrollbar': {
       width: '8px',

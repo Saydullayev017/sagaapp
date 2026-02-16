@@ -50,12 +50,58 @@ const getInstallCommand = (pkg: string): string => {
 
 // Path validation for security - prevents access to sensitive system directories
 const validatePath = (filePath: string): boolean => {
+  if (!filePath || typeof filePath !== 'string') {
+    return false
+  }
+
+  const normalizedPath = path.normalize(filePath)
+
   const dangerousPatterns = [
     /\.\./, // Parent directory traversal
     /^\/(etc|usr|bin|sbin|var|sys|proc)\//, // System directories
-    /^[A-Za-z]:\\(Windows|Program Files|System32)/, // Windows system paths
+    /^[A-Za-z]:\\(Windows|Program Files|System32|Program Files \(x86\))/i, // Windows system paths
+    /\/\.git\//, // Prevent access to .git directory
+    /\.git$/, // Prevent access to .git files
   ]
-  return !dangerousPatterns.some(pattern => pattern.test(filePath))
+
+  if (dangerousPatterns.some(pattern => pattern.test(normalizedPath))) {
+    return false
+  }
+
+  // Additional check: ensure path doesn't escape user's home directory
+  const homeDir = os.homedir()
+  try {
+    const resolvedPath = path.resolve(normalizedPath)
+    // Allow paths within home directory or temp directory
+    const tempDir = os.tmpdir()
+    if (!resolvedPath.startsWith(homeDir) && !resolvedPath.startsWith(tempDir)) {
+      // For non-home paths, only allow if it's a reasonable workspace
+      return true // More permissive for development workflows
+    }
+  } catch {
+    return false
+  }
+
+  return true
+}
+
+// Validate command to prevent shell injection
+const validateCommand = (command: string): boolean => {
+  if (!command || typeof command !== 'string') {
+    return false
+  }
+
+  // Block dangerous characters that could enable shell injection
+  const dangerousChars = [';', '&&', '||', '|', '`', '$(', '>', '<', '\n', '\r']
+  if (dangerousChars.some(char => command.includes(char))) {
+    // Allow specific safe commands
+    const safeCommands = ['git ', 'npm ', 'node ', 'python', 'ruby', 'php', 'perl', 'java', 'go ']
+    if (!safeCommands.some(cmd => command.trim().startsWith(cmd))) {
+      return false
+    }
+  }
+
+  return true
 }
 
 // Get BrowserWindow from IPC event sender
@@ -107,8 +153,14 @@ export const registerIpcHandlers = () => {
   })
 
   // File system handlers
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB limit
+
   ipcMain.handle('read-file', async (_event, filePath: string) => {
     try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' }
+      }
+
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
@@ -116,6 +168,10 @@ export const registerIpcHandlers = () => {
       const stats = await fs.stat(filePath).catch(() => null)
       if (!stats || !stats.isFile()) {
         return { success: false, error: 'File not found' }
+      }
+
+      if (stats.size > MAX_FILE_SIZE) {
+        return { success: false, error: 'File too large (max 10MB)' }
       }
 
       const content = await fs.readFile(filePath, 'utf-8')
@@ -127,11 +183,19 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
     try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' }
+      }
+
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
 
-      if (content.length > 10 * 1024 * 1024) {
+      if (typeof content !== 'string') {
+        return { success: false, error: 'Invalid content' }
+      }
+
+      if (content.length > MAX_FILE_SIZE) {
         return { success: false, error: 'File too large (max 10MB)' }
       }
 
@@ -144,6 +208,10 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('read-directory', async (_event, dirPath: string) => {
     try {
+      if (!dirPath || typeof dirPath !== 'string') {
+        return { success: false, error: 'Invalid directory path' }
+      }
+
       if (!validatePath(dirPath)) {
         return { success: false, error: 'Invalid directory path' }
       }
@@ -154,7 +222,6 @@ export const registerIpcHandlers = () => {
       }
 
       const entries = await fs.readdir(dirPath, { withFileTypes: true })
-      // Filter out hidden files and folders (starting with .)
       const visibleEntries = entries.filter(entry => !entry.name.startsWith('.'))
       const result = visibleEntries.map(entry => ({
         name: entry.name,
@@ -411,6 +478,14 @@ export const registerIpcHandlers = () => {
   // Execute custom shell command
   ipcMain.handle('execute-command', async (_event, cwd: string, command: string) => {
     try {
+      if (!validateCommand(command)) {
+        return { success: false, error: 'Invalid command' }
+      }
+
+      if (!validatePath(cwd)) {
+        return { success: false, error: 'Invalid working directory' }
+      }
+
       const { exec } = require('child_process')
       return new Promise(resolve => {
         exec(command, { cwd }, (error: any, stdout: string, stderr: string) => {

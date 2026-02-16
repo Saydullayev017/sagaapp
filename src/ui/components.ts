@@ -8,6 +8,7 @@ import {
   getCursorPosition,
 } from '../editor/codemirror'
 import { parseMarkdown } from '../editor/markdown-parser'
+import { debounce, escapeHtml, showNotify } from '../utils/dom'
 
 // Types for file tree
 interface TreeNode {
@@ -97,10 +98,6 @@ const state: UIState = {
 
 // CodeMirror editor instance
 let cmEditor: EditorView | null = null
-
-// Auto-save timeout
-let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null
-const AUTO_SAVE_DELAY = 2000
 
 // Storage keys
 const STORAGE_KEY = 'japp-state'
@@ -560,7 +557,7 @@ function setupEventListeners(): void {
           await loadFileTree(filePath)
           updateGitStatus(filePath)
           saveState()
-          showNotification(`Opened folder: ${file.name}`, 'success')
+          showNotify(`Opened folder: ${file.name}`, 'success')
         } else if (
           file.name.endsWith('.md') ||
           file.name.endsWith('.markdown') ||
@@ -608,7 +605,7 @@ function setupEventListeners(): void {
         await loadFileTree(filePath)
         updateGitStatus(filePath)
         saveState()
-        showNotification(`Opened folder: ${file.name}`, 'success')
+        showNotify(`Opened folder: ${file.name}`, 'success')
       }
     })
   }
@@ -623,7 +620,7 @@ function setupEventListeners(): void {
 // Git functions
 async function gitCommit(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
@@ -632,39 +629,39 @@ async function gitCommit(): Promise<void> {
 
   const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
   if (result?.success) {
-    showNotification('Commit successful', 'success')
+    showNotify('Commit successful', 'success')
     updateGitStatus(state.currentFolder)
   } else {
-    showNotification(result?.error || 'Commit failed', 'error')
+    showNotify(result?.error || 'Commit failed', 'error')
   }
 }
 
 async function gitPush(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
   const result = await window.electronAPI?.gitPush(state.currentFolder)
   if (result?.success) {
-    showNotification('Push successful', 'success')
+    showNotify('Push successful', 'success')
   } else {
-    showNotification(result?.error || 'Push failed', 'error')
+    showNotify(result?.error || 'Push failed', 'error')
   }
 }
 
 async function gitPull(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
   const result = await window.electronAPI?.gitPull(state.currentFolder)
   if (result?.success) {
-    showNotification('Pull successful', 'success')
+    showNotify('Pull successful', 'success')
     updateGitStatus(state.currentFolder)
   } else {
-    showNotification(result?.error || 'Pull failed', 'error')
+    showNotify(result?.error || 'Pull failed', 'error')
   }
 }
 
@@ -1002,14 +999,6 @@ function togglePreview(): void {
   }
 }
 
-function debounce(func: Function, wait: number): (...args: any[]) => void {
-  let timeout: ReturnType<typeof setTimeout>
-  return (...args: any[]) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
-  }
-}
-
 // Generate unique folder ID from path hash
 function getFolderId(path: string): number {
   let hash = 0
@@ -1170,12 +1159,6 @@ function renderTreeNodes(nodes: TreeNode[], _depth: number): string {
   return html
 }
 
-function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}
-
 function setupFileTreeListeners(): void {
   const fileTree = document.getElementById('file-tree')
   if (!fileTree) return
@@ -1321,10 +1304,10 @@ async function saveCurrentFile(): Promise<void> {
       state.openTabs[state.activeTabIndex].modified = false
       renderTabs()
     }
-    showNotification('File saved successfully', 'success')
+    showNotify('File saved successfully', 'success')
     updateGitStatus(state.currentFolder || '')
   } else {
-    showNotification('Error saving file', 'error')
+    showNotify('Error saving file', 'error')
   }
 }
 
@@ -1348,20 +1331,9 @@ async function saveAsNewFile(): Promise<void> {
           result.filePath.split('/').pop() || result.filePath.split('\\').pop() || result.filePath
         statusFile.textContent = fileName
       }
-      showNotification('File saved successfully', 'success')
+      showNotify('File saved successfully', 'success')
     }
   }
-}
-
-function scheduleAutoSave(): void {
-  if (autoSaveTimeout) {
-    clearTimeout(autoSaveTimeout)
-  }
-  autoSaveTimeout = setTimeout(() => {
-    if (state.currentFile && cmEditor) {
-      saveCurrentFile()
-    }
-  }, AUTO_SAVE_DELAY)
 }
 
 function saveState(): void {
@@ -1433,7 +1405,7 @@ function formatMarkdown(): void {
   content = content.replace(/([^\n])\n(#{1,6})/gim, '$1\n\n$2')
 
   setEditorContent(cmEditor, content)
-  showNotification('Markdown formatted', 'success')
+  showNotify('Markdown formatted', 'success')
 }
 
 function setupBottomPanel(): void {
@@ -1619,7 +1591,7 @@ function setupDragDrop(): void {
 
 async function handleImageDrop(file: File): Promise<void> {
   if (!state.currentFolder || !cmEditor) {
-    showNotification('Open a folder first', 'error')
+    showNotify('Open a folder first', 'error')
     return
   }
 
@@ -1645,16 +1617,16 @@ async function handleImageDrop(file: File): Promise<void> {
       if (result?.success) {
         const markdown = `![${file.name}](./assets/${fileName})\n`
         insertTextAtCursor(markdown)
-        showNotification('Image saved', 'success')
+        showNotify('Image saved', 'success')
         loadFileTree(state.currentFolder!)
       } else {
-        showNotification('Failed to save image', 'error')
+        showNotify('Failed to save image', 'error')
       }
     }
     reader.readAsDataURL(file)
   } catch (e) {
     console.error('Image drop error:', e)
-    showNotification('Failed to process image', 'error')
+    showNotify('Failed to process image', 'error')
   }
 }
 
@@ -1722,24 +1694,6 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       gitCurrentBranch.textContent = '-'
     }
   }
-}
-
-function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
-  const notification = document.createElement('div')
-  notification.className = `notification notification-${type}`
-  notification.textContent = message
-  document.body.appendChild(notification)
-
-  setTimeout(() => {
-    notification.classList.add('show')
-  }, 10)
-
-  setTimeout(() => {
-    notification.classList.remove('show')
-    setTimeout(() => {
-      notification.remove()
-    }, 300)
-  }, 3000)
 }
 
 function showAboutAlert(): void {
@@ -2019,7 +1973,7 @@ function setupSettingsModal(): void {
     document.documentElement.setAttribute('data-theme', theme || 'glass')
 
     closeSettings()
-    showNotification('Settings saved!', 'success')
+    showNotify('Settings saved!', 'success')
   })
 
   // About button - shows small alert
@@ -2094,10 +2048,10 @@ function renderLanguages(languages: LanguageInfo[]): void {
 
       const result = await window.electronAPI?.installLanguage(langId)
       if (result?.success) {
-        showNotification(`${langId} installed successfully!`, 'success')
+        showNotify(`${langId} installed successfully!`, 'success')
         await loadLanguages()
       } else {
-        showNotification(result?.error || 'Installation failed', 'error')
+        showNotify(result?.error || 'Installation failed', 'error')
         target.disabled = false
         target.textContent = 'Install'
       }
@@ -2118,10 +2072,10 @@ function renderLanguages(languages: LanguageInfo[]): void {
 
       const result = await window.electronAPI?.uninstallLanguage(langId)
       if (result?.success) {
-        showNotification(`${langId} uninstalled successfully!`, 'success')
+        showNotify(`${langId} uninstalled successfully!`, 'success')
         await loadLanguages()
       } else {
-        showNotification(result?.error || 'Uninstall failed', 'error')
+        showNotify(result?.error || 'Uninstall failed', 'error')
         target.disabled = false
         target.textContent = 'Uninstall'
       }
@@ -2140,12 +2094,12 @@ function renderLanguages(languages: LanguageInfo[]): void {
       const result = await window.electronAPI?.checkLanguage(langId)
       if (result?.success) {
         if (result.fixed) {
-          showNotification(`${langId} fixed! Now using: ${result.path}`, 'success')
+          showNotify(`${langId} fixed! Now using: ${result.path}`, 'success')
         } else {
-          showNotification(`${langId} is working! Path: ${result.path}`, 'success')
+          showNotify(`${langId} is working! Path: ${result.path}`, 'success')
         }
       } else {
-        showNotification(result?.error || `${langId} not found. Try installing.`, 'error')
+        showNotify(result?.error || `${langId} not found. Try installing.`, 'error')
       }
       await loadLanguages()
     })
@@ -2205,7 +2159,7 @@ function getParentFolder(filePath: string): string {
 
 async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2255,14 +2209,14 @@ async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
       // For files, get the full path and open in editor
       if (type === 'file' && result.path) {
         const createdFilePath = result.path
-        showNotification(`File created successfully in "${folderName}"`, 'success')
+        showNotify(`File created successfully in "${folderName}"`, 'success')
 
         // Select and open the file
         state.fileTree.selectedPath = createdFilePath
         await loadFileTree(state.currentFolder, true)
         await openFileInEditor(createdFilePath)
       } else {
-        showNotification(
+        showNotify(
           `${type === 'file' ? 'File' : 'Folder'} created successfully in "${folderName}"`,
           'success'
         )
@@ -2274,10 +2228,10 @@ async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
         await loadFileTree(state.currentFolder, true)
       }
     } else {
-      showNotification(result?.error || `Failed to create ${type}`, 'error')
+      showNotify(result?.error || `Failed to create ${type}`, 'error')
     }
   } catch (error) {
-    showNotification(`Error creating ${type}`, 'error')
+    showNotify(`Error creating ${type}`, 'error')
   }
 }
 
@@ -2298,7 +2252,7 @@ async function openFolderDialog(): Promise<void> {
 async function deleteSelectedItem(): Promise<void> {
   const selectedPath = state.fileTree.selectedPath
   if (!selectedPath) {
-    showNotification('Please select a file or folder to delete', 'error')
+    showNotify('Please select a file or folder to delete', 'error')
     return
   }
 
@@ -2310,7 +2264,7 @@ async function deleteSelectedItem(): Promise<void> {
   try {
     const result = await window.electronAPI?.deleteItem(selectedPath)
     if (result?.success) {
-      showNotification('Item deleted successfully', 'success')
+      showNotify('Item deleted successfully', 'success')
       if (state.currentFolder) {
         await loadFileTree(state.currentFolder, true)
       }
@@ -2323,17 +2277,17 @@ async function deleteSelectedItem(): Promise<void> {
         if (statusFile) statusFile.textContent = 'No file opened'
       }
     } else {
-      showNotification(result?.error || 'Failed to delete item', 'error')
+      showNotify(result?.error || 'Failed to delete item', 'error')
     }
   } catch (error) {
-    showNotification('Error deleting item', 'error')
+    showNotify('Error deleting item', 'error')
   }
 }
 
 async function renameSelectedItem(): Promise<void> {
   const selectedPath = state.fileTree.selectedPath
   if (!selectedPath) {
-    showNotification('Please select a file or folder to rename', 'error')
+    showNotify('Please select a file or folder to rename', 'error')
     return
   }
 
@@ -2345,7 +2299,7 @@ async function renameSelectedItem(): Promise<void> {
   try {
     const result = await window.electronAPI?.renameItem(selectedPath, newName)
     if (result?.success && result.newPath) {
-      showNotification('Item renamed successfully', 'success')
+      showNotify('Item renamed successfully', 'success')
 
       // Update current file if it was renamed
       if (state.currentFile === selectedPath) {
@@ -2359,10 +2313,10 @@ async function renameSelectedItem(): Promise<void> {
         await loadFileTree(state.currentFolder, true)
       }
     } else {
-      showNotification(result?.error || 'Failed to rename item', 'error')
+      showNotify(result?.error || 'Failed to rename item', 'error')
     }
   } catch (error) {
-    showNotification('Error renaming item', 'error')
+    showNotify('Error renaming item', 'error')
   }
 }
 
@@ -2518,7 +2472,7 @@ function setupOutline(): void {
 // Git Workflow Functions
 async function createNewBranch(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2528,19 +2482,19 @@ async function createNewBranch(): Promise<void> {
   try {
     const result = await window.electronAPI?.gitCreateBranch(state.currentFolder, branchName)
     if (result?.success) {
-      showNotification(`Branch "${branchName}" created and checked out`, 'success')
+      showNotify(`Branch "${branchName}" created and checked out`, 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(result?.error || 'Failed to create branch', 'error')
+      showNotify(result?.error || 'Failed to create branch', 'error')
     }
   } catch (error) {
-    showNotification('Error creating branch', 'error')
+    showNotify('Error creating branch', 'error')
   }
 }
 
 async function showCommitModal(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2551,26 +2505,26 @@ async function showCommitModal(): Promise<void> {
     // First stage all changes
     const addResult = await window.electronAPI?.gitAdd(state.currentFolder, '.')
     if (!addResult?.success) {
-      showNotification(addResult?.error || 'Failed to stage changes', 'error')
+      showNotify(addResult?.error || 'Failed to stage changes', 'error')
       return
     }
 
     // Then commit
     const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
     if (result?.success) {
-      showNotification('Changes committed successfully', 'success')
+      showNotify('Changes committed successfully', 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(result?.error || 'Failed to commit', 'error')
+      showNotify(result?.error || 'Failed to commit', 'error')
     }
   } catch (error) {
-    showNotification('Error committing changes', 'error')
+    showNotify('Error committing changes', 'error')
   }
 }
 
 async function mergeToDevelop(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2578,14 +2532,14 @@ async function mergeToDevelop(): Promise<void> {
     // Get current branch
     const branchResult = await window.electronAPI?.gitBranch(state.currentFolder)
     if (!branchResult?.success || !branchResult.branch) {
-      showNotification('Failed to get current branch', 'error')
+      showNotify('Failed to get current branch', 'error')
       return
     }
 
     const currentBranch = branchResult.branch
 
     if (currentBranch === 'develop') {
-      showNotification('Already on develop branch', 'error')
+      showNotify('Already on develop branch', 'error')
       return
     }
 
@@ -2598,7 +2552,7 @@ async function mergeToDevelop(): Promise<void> {
       // Try to create develop if it doesn't exist
       const createResult = await window.electronAPI?.gitCreateBranch(state.currentFolder, 'develop')
       if (!createResult?.success) {
-        showNotification(checkoutResult?.error || 'Failed to checkout develop', 'error')
+        showNotify(checkoutResult?.error || 'Failed to checkout develop', 'error')
         return
       }
     }
@@ -2606,12 +2560,12 @@ async function mergeToDevelop(): Promise<void> {
     // Merge current branch
     const mergeResult = await window.electronAPI?.gitMerge(state.currentFolder, currentBranch)
     if (mergeResult?.success) {
-      showNotification(`Successfully merged "${currentBranch}" into "develop"`, 'success')
+      showNotify(`Successfully merged "${currentBranch}" into "develop"`, 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(mergeResult?.error || 'Merge failed', 'error')
+      showNotify(mergeResult?.error || 'Merge failed', 'error')
     }
   } catch (error) {
-    showNotification('Error during merge', 'error')
+    showNotify('Error during merge', 'error')
   }
 }
