@@ -684,6 +684,12 @@ body {
   border-color: var(--accent);
 }
 
+.toolbar-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .toolbar-btn:active {
   transform: translateY(1px);
 }
