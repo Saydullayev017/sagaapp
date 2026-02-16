@@ -1,4 +1,4 @@
-import { marked } from 'marked'
+import { marked, Renderer } from 'marked'
 import DOMPurify from 'dompurify'
 
 // Configure marked options for GitHub Flavored Markdown
@@ -6,6 +6,43 @@ marked.use({
   gfm: true,
   breaks: true,
 })
+
+// Custom renderer for code blocks with run support
+const renderer = new Renderer()
+
+renderer.code = function ({ text, lang }: { text: string; lang?: string; escaped?: boolean }) {
+  const language = lang || ''
+  const isRunnable = language.includes('run')
+
+  // Extract actual language (remove 'run' keyword)
+  const actualLang = language.replace(/\brun\b/gi, '').trim() || 'text'
+
+  const escapedCode = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+
+  const id = `code-${Math.random().toString(36).substr(2, 9)}`
+
+  let html = `<div class="code-block" data-code-id="${id}">`
+
+  if (isRunnable) {
+    html += `<div class="code-block-header">
+      <span class="code-lang">${actualLang}</span>
+      <button class="run-code-btn" data-code-id="${id}" data-language="${actualLang}">▶ Run</button>
+    </div>`
+  }
+
+  html += `<pre><code class="language-${actualLang}">${escapedCode}</code></pre>`
+  html += `<div class="code-output" id="output-${id}" style="display: none;"></div>`
+  html += `</div>`
+
+  return html
+}
+
+marked.use({ renderer })
 
 // Configure DOMPurify for safe HTML rendering
 const purifyConfig = {
@@ -43,6 +80,7 @@ const purifyConfig = {
     'div',
     'span',
     'input',
+    'button',
   ],
   ALLOWED_ATTR: [
     'href',
@@ -57,6 +95,8 @@ const purifyConfig = {
     'type',
     'checked',
     'disabled',
+    'data-code-id',
+    'data-language',
   ],
   ALLOW_DATA_ATTR: true,
   SANITIZE_DOM: true,

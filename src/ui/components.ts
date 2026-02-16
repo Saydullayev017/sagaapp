@@ -31,9 +31,18 @@ interface FileTreeState {
 }
 
 // State management
+interface OpenTab {
+  path: string
+  name: string
+  content: string
+  modified: boolean
+}
+
 interface UIState {
   currentFolder: string | null
   currentFile: string | null
+  openTabs: OpenTab[]
+  activeTabIndex: number
   expandedFolders: Set<string>
   sidebarWidth: number
   editorWidth: number
@@ -56,6 +65,8 @@ interface UIState {
 const state: UIState = {
   currentFolder: null,
   currentFile: null,
+  openTabs: [],
+  activeTabIndex: -1,
   expandedFolders: new Set(),
   sidebarWidth: 280,
   editorWidth: 50,
@@ -195,6 +206,7 @@ export function initializeUI(): void {
           </div>
           <div class="toolbar-center"></div>
           <div class="toolbar-right">
+            <button class="toolbar-btn" id="btn-settings" title="Settings">⚙</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -204,6 +216,10 @@ export function initializeUI(): void {
         
         <div class="editor-content-wrapper" id="editor-content-wrapper">
           <div class="editor-pane" id="editor-pane">
+            <!-- Tab Bar -->
+            <div class="tab-bar" id="tab-bar">
+              <div class="tabs-container" id="tabs-container"></div>
+            </div>
             <div class="codemirror-container" id="codemirror-editor"></div>
           </div>
           
@@ -287,6 +303,91 @@ export function initializeUI(): void {
         </div>
       </div>
     </div>
+    
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-overlay">
+      <div class="settings-dialog settings-with-sidebar">
+        <div class="settings-sidebar">
+          <div class="settings-nav">
+            <button class="settings-nav-item active" data-section="editor">
+              <span class="settings-nav-icon">📝</span>
+              <span>Editor</span>
+            </button>
+            <button class="settings-nav-item" data-section="appearance">
+              <span class="settings-nav-icon">🎨</span>
+              <span>Appearance</span>
+            </button>
+            <button class="settings-nav-item" data-section="languages">
+              <span class="settings-nav-icon">💻</span>
+              <span>Languages</span>
+            </button>
+            <button class="settings-nav-item" data-section="about">
+              <span class="settings-nav-icon">ℹ️</span>
+              <span>About</span>
+            </button>
+          </div>
+        </div>
+        <div class="settings-main">
+          <div class="settings-header">
+            <h3>Settings</h3>
+            <button class="settings-close" id="settings-close">&times;</button>
+          </div>
+          <div class="settings-body">
+            <!-- Editor Section -->
+            <div class="settings-section" id="settings-section-editor">
+              <h4>Editor</h4>
+              <label class="settings-option">
+                <span>Font Size</span>
+                <select id="setting-fontsize">
+                  <option value="12">12px</option>
+                  <option value="14" selected>14px</option>
+                  <option value="16">16px</option>
+                  <option value="18">18px</option>
+                </select>
+              </label>
+              <label class="settings-option">
+                <span>Word Wrap</span>
+                <input type="checkbox" id="setting-wordwrap" checked />
+              </label>
+            </div>
+            <!-- Appearance Section -->
+            <div class="settings-section hidden" id="settings-section-appearance">
+              <h4>Appearance</h4>
+              <label class="settings-option">
+                <span>Theme</span>
+                <select id="setting-theme">
+                  <option value="glass" selected>Dark Glass</option>
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                </select>
+              </label>
+            </div>
+            <!-- Languages Section -->
+            <div class="settings-section hidden" id="settings-section-languages">
+              <h4>Code Execution</h4>
+              <p class="settings-info">Check installed languages and install missing ones</p>
+              <div class="languages-list" id="languages-list">
+                <div class="languages-loading">Loading languages...</div>
+              </div>
+            </div>
+            <!-- About Section -->
+            <div class="settings-section hidden" id="settings-section-about">
+              <h4>About</h4>
+              <div class="about-content">
+                <div class="about-logo">📝</div>
+                <h3>SagaApp</h3>
+                <p class="about-version">Version 1.0.0</p>
+                <p class="about-desc">Modern Markdown Editor</p>
+                <p class="about-tech">Built with Electron + CodeMirror</p>
+              </div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="modal-btn modal-btn-primary" id="settings-save">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `
 
   // Загружаем тему
@@ -301,6 +402,7 @@ export function initializeUI(): void {
   setupBottomPanel()
   setupTerminal()
   setupModal()
+  setupSettingsModal()
   setupOutline()
   initOutlinePanel()
 
@@ -392,7 +494,124 @@ function setupEventListeners(): void {
       e.preventDefault()
       saveCurrentFile()
     }
+
+    // Ctrl+Tab: Next tab
+    if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault()
+      if (state.openTabs.length > 1) {
+        const nextIndex = (state.activeTabIndex + 1) % state.openTabs.length
+        switchToTab(nextIndex)
+      }
+    }
+
+    // Ctrl+Shift+Tab: Previous tab
+    if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault()
+      if (state.openTabs.length > 1) {
+        const prevIndex =
+          state.activeTabIndex - 1 < 0 ? state.openTabs.length - 1 : state.activeTabIndex - 1
+        switchToTab(prevIndex)
+      }
+    }
+
+    // Ctrl+W: Close current tab
+    if (isMod && e.key === 'w') {
+      e.preventDefault()
+      if (state.activeTabIndex >= 0) {
+        closeTab(state.activeTabIndex)
+      }
+    }
   })
+
+  // Drag and Drop functionality
+  const editorContentWrapper = document.getElementById('editor-content-wrapper')
+
+  if (editorContentWrapper) {
+    editorContentWrapper.addEventListener('dragover', e => {
+      e.preventDefault()
+      e.stopPropagation()
+      editorContentWrapper.classList.add('drag-over')
+    })
+
+    editorContentWrapper.addEventListener('dragleave', e => {
+      e.preventDefault()
+      e.stopPropagation()
+      editorContentWrapper.classList.remove('drag-over')
+    })
+
+    editorContentWrapper.addEventListener('drop', async e => {
+      e.preventDefault()
+      e.stopPropagation()
+      editorContentWrapper.classList.remove('drag-over')
+
+      const files = e.dataTransfer?.files
+      if (!files || files.length === 0) return
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const filePath = (file as any).path
+
+        if (!filePath) continue
+
+        // Check if it's a directory
+        if (file.type === '' && !file.name.includes('.')) {
+          // Likely a directory - open as folder
+          state.currentFolder = filePath
+          await loadFileTree(filePath)
+          updateGitStatus(filePath)
+          saveState()
+          showNotification(`Opened folder: ${file.name}`, 'success')
+        } else if (
+          file.name.endsWith('.md') ||
+          file.name.endsWith('.markdown') ||
+          file.name.endsWith('.txt')
+        ) {
+          // Open as file
+          await openFileInEditor(filePath)
+        } else {
+          // Try to open anyway
+          await openFileInEditor(filePath)
+        }
+      }
+    })
+  }
+
+  // Also support dropping on sidebar to open folder
+  const sidebar = document.getElementById('sidebar')
+
+  if (sidebar) {
+    sidebar.addEventListener('dragover', e => {
+      e.preventDefault()
+      sidebar.classList.add('drag-over-sidebar')
+    })
+
+    sidebar.addEventListener('dragleave', e => {
+      e.preventDefault()
+      sidebar.classList.remove('drag-over-sidebar')
+    })
+
+    sidebar.addEventListener('drop', async e => {
+      e.preventDefault()
+      sidebar.classList.remove('drag-over-sidebar')
+
+      const files = e.dataTransfer?.files
+      if (!files || files.length === 0) return
+
+      const file = files[0]
+      const filePath = (file as any).path
+
+      if (!filePath) return
+
+      // Check if it's a directory
+      if (file.type === '' && !file.name.includes('.')) {
+        state.currentFolder = filePath
+        await loadFileTree(filePath)
+        updateGitStatus(filePath)
+        saveState()
+        showNotification(`Opened folder: ${file.name}`, 'success')
+      }
+    })
+  }
 
   // Git buttons
   document.getElementById('git-commit')?.addEventListener('click', gitCommit)
@@ -521,6 +740,116 @@ function setupResizeHandles(): void {
   }
 }
 
+// Tab Management Functions
+function renderTabs(): void {
+  const container = document.getElementById('tabs-container')
+  if (!container) return
+
+  container.innerHTML = state.openTabs
+    .map(
+      (tab, index) => `
+    <div class="tab ${index === state.activeTabIndex ? 'active' : ''}" data-index="${index}">
+      <span class="tab-name">${escapeHtml(tab.name)}</span>
+      ${tab.modified ? '<span class="tab-modified">●</span>' : ''}
+      <button class="tab-close" data-index="${index}">&times;</button>
+    </div>
+  `
+    )
+    .join('')
+
+  container.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', e => {
+      const target = e.target as HTMLElement
+      if (target.classList.contains('tab-close')) {
+        const index = parseInt(target.dataset.index || '0')
+        closeTab(index)
+      } else {
+        const index = parseInt((tab as HTMLElement).dataset.index || '0')
+        switchToTab(index)
+      }
+    })
+  })
+}
+
+function openInNewTab(filePath: string, content: string): void {
+  // Check if already open
+  const existingIndex = state.openTabs.findIndex(t => t.path === filePath)
+  if (existingIndex >= 0) {
+    switchToTab(existingIndex)
+    return
+  }
+
+  const fileName = filePath.split(/[\\/]/).pop() || 'Untitled'
+  state.openTabs.push({
+    path: filePath,
+    name: fileName,
+    content: content,
+    modified: false,
+  })
+  state.activeTabIndex = state.openTabs.length - 1
+
+  renderTabs()
+  loadContentInEditor(content)
+  state.currentFile = filePath
+}
+
+function switchToTab(index: number): void {
+  if (index < 0 || index >= state.openTabs.length) return
+
+  // Save current content before switching
+  if (state.activeTabIndex >= 0 && cmEditor) {
+    state.openTabs[state.activeTabIndex].content = getEditorContent(cmEditor)
+  }
+
+  state.activeTabIndex = index
+  const tab = state.openTabs[index]
+
+  loadContentInEditor(tab.content)
+  state.currentFile = tab.path
+  renderTabs()
+  updateOutline()
+}
+
+async function closeTab(index: number): Promise<void> {
+  const tab = state.openTabs[index]
+  if (!tab) return
+
+  // Save content before closing
+  if (tab.path === state.currentFile && cmEditor) {
+    tab.content = getEditorContent(cmEditor)
+  }
+
+  // Check if modified and ask to save
+  if (tab.modified) {
+    const save = confirm(`Save changes to ${tab.name}?`)
+    if (save) {
+      await window.electronAPI?.writeFile(tab.path, tab.content)
+    }
+  }
+
+  state.openTabs.splice(index, 1)
+
+  if (state.openTabs.length === 0) {
+    state.activeTabIndex = -1
+    state.currentFile = null
+    if (cmEditor) {
+      setEditorContent(cmEditor, '')
+    }
+  } else if (index === state.activeTabIndex) {
+    const newIndex = Math.min(index, state.openTabs.length - 1)
+    switchToTab(newIndex)
+  } else if (index < state.activeTabIndex) {
+    state.activeTabIndex--
+  }
+
+  renderTabs()
+}
+
+function loadContentInEditor(content: string): void {
+  if (!cmEditor) return
+  setEditorContent(cmEditor, content)
+}
+
 function setupCodeMirrorEditor(): void {
   const container = document.getElementById('codemirror-editor')
   if (!container) return
@@ -530,9 +859,21 @@ function setupCodeMirrorEditor(): void {
     '',
     debounce(() => {
       updateCursorPosition()
-      scheduleAutoSave()
+      // Auto-save disabled - user saves manually with Ctrl+S
       updateOutline()
-    }, 500)
+      // Update current tab content
+      if (state.activeTabIndex >= 0 && state.openTabs[state.activeTabIndex]) {
+        const content = getEditorContent(cmEditor!)
+        state.openTabs[state.activeTabIndex].content = content
+        state.openTabs[state.activeTabIndex].modified = true
+        renderTabs()
+      }
+      // Live preview update (only if preview is visible)
+      const previewPane = document.getElementById('preview-pane')
+      if (previewPane && !previewPane.classList.contains('hidden')) {
+        updatePreview()
+      }
+    }, 300)
   )
 }
 
@@ -571,6 +912,59 @@ async function updatePreview(): Promise<void> {
   const content = getEditorContent(cmEditor)
   const html = await parseMarkdown(content)
   previewContent.innerHTML = html
+
+  // Add event listeners for run code buttons
+  setupCodeExecution()
+}
+
+function setupCodeExecution(): void {
+  const previewContent = document.getElementById('preview-content')
+  if (!previewContent) return
+
+  const runButtons = previewContent.querySelectorAll('.run-code-btn')
+
+  runButtons.forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const button = e.target as HTMLButtonElement
+      const codeId = button.dataset.codeId
+      const language = button.dataset.language
+
+      if (!codeId || !language) return
+
+      const codeBlock = document.querySelector(`[data-code-id="${codeId}"]`)
+      const codeElement = codeBlock?.querySelector('code')
+      const outputElement = codeBlock?.querySelector('.code-output') as HTMLElement | null
+
+      if (!codeElement || !outputElement) return
+
+      const code = codeElement.textContent || ''
+
+      // Show loading state
+      button.disabled = true
+      button.textContent = 'Running...'
+      outputElement.style.display = 'block'
+      outputElement.textContent = 'Executing...'
+      outputElement.className = 'code-output'
+
+      try {
+        const result = await window.electronAPI?.executeCode(language, code)
+
+        if (result?.success) {
+          outputElement.textContent = result.output || '(no output)'
+          outputElement.className = 'code-output success'
+        } else {
+          outputElement.textContent = result?.error || 'Execution failed'
+          outputElement.className = 'code-output error'
+        }
+      } catch (error: any) {
+        outputElement.textContent = error.message || 'Execution failed'
+        outputElement.className = 'code-output error'
+      }
+
+      button.disabled = false
+      button.textContent = '▶ Run'
+    })
+  })
 }
 
 function toggleSidebar(): void {
@@ -882,32 +1276,35 @@ async function openFileInEditor(filePath: string): Promise<void> {
 
   const result = await window.electronAPI.readFile(filePath)
   if (result.success && result.content !== undefined) {
-    if (cmEditor) {
-      setEditorContent(cmEditor, result.content)
-      state.currentFile = filePath
+    // Open in new tab instead of replacing
+    openInNewTab(filePath, result.content)
 
-      // Update status
-      const statusFile = document.getElementById('status-file')
-      if (statusFile) {
-        const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || filePath
-        statusFile.textContent = fileName
-      }
-
-      // Update active file in tree
-      document.querySelectorAll('.tree-item-content').forEach(item => {
-        item.classList.remove('active')
-      })
-      const activeItem = document.querySelector(`[data-path="${filePath}"]`)
-      if (activeItem) {
-        activeItem.classList.add('active')
-      }
-
-      saveState()
+    // Update status
+    const statusFile = document.getElementById('status-file')
+    if (statusFile) {
+      const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || filePath
+      statusFile.textContent = fileName
     }
+
+    // Update active file in tree
+    document.querySelectorAll('.tree-item-content').forEach(item => {
+      item.classList.remove('active')
+    })
+    const activeItem = document.querySelector(`[data-path="${filePath}"]`)
+    if (activeItem) {
+      activeItem.classList.add('active')
+    }
+
+    saveState()
   }
 }
 
 async function saveCurrentFile(): Promise<void> {
+  // Save current tab content first
+  if (state.activeTabIndex >= 0 && cmEditor) {
+    state.openTabs[state.activeTabIndex].content = getEditorContent(cmEditor)
+  }
+
   if (!state.currentFile || !window.electronAPI?.writeFile) {
     // Save as new file
     saveAsNewFile()
@@ -919,6 +1316,11 @@ async function saveCurrentFile(): Promise<void> {
   const content = getEditorContent(cmEditor)
   const result = await window.electronAPI.writeFile(state.currentFile, content)
   if (result.success) {
+    // Mark tab as not modified
+    if (state.activeTabIndex >= 0) {
+      state.openTabs[state.activeTabIndex].modified = false
+      renderTabs()
+    }
     showNotification('File saved successfully', 'success')
     updateGitStatus(state.currentFolder || '')
   } else {
@@ -1340,6 +1742,31 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
   }, 3000)
 }
 
+function showAboutAlert(): void {
+  const alertBox = document.createElement('div')
+  alertBox.className = 'about-alert'
+  alertBox.innerHTML = `
+    <div class="about-alert-content">
+      <h3>SagaApp</h3>
+      <p>Version 1.0.0</p>
+      <p>Modern Markdown Editor</p>
+      <p class="about-info">Built with Electron + CodeMirror</p>
+    </div>
+  `
+  document.body.appendChild(alertBox)
+
+  setTimeout(() => {
+    alertBox.classList.add('show')
+  }, 10)
+
+  setTimeout(() => {
+    alertBox.classList.remove('show')
+    setTimeout(() => {
+      alertBox.remove()
+    }, 300)
+  }, 4000)
+}
+
 function loadTheme(): void {
   const savedTheme = localStorage.getItem('japp-theme')
   if (savedTheme && ['dark', 'light', 'glass'].includes(savedTheme)) {
@@ -1521,6 +1948,207 @@ function setupModal(): void {
 
   overlay?.addEventListener('click', e => {
     if (e.target === overlay) closeModal()
+  })
+}
+
+// Settings Modal
+function setupSettingsModal(): void {
+  const settingsBtn = document.getElementById('btn-settings')
+  const settingsOverlay = document.getElementById('settings-overlay')
+  const settingsClose = document.getElementById('settings-close')
+  const settingsSave = document.getElementById('settings-save')
+
+  // Load current settings
+  const fontSizeSelect = document.getElementById('setting-fontsize') as HTMLSelectElement
+  const wordWrapCheck = document.getElementById('setting-wordwrap') as HTMLInputElement
+  const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement
+
+  // Load saved settings
+  const savedFontSize = localStorage.getItem('saga-font-size') || '14'
+  const savedWordWrap = localStorage.getItem('saga-word-wrap') !== 'false'
+  const savedTheme = localStorage.getItem('saga-theme') || 'glass'
+
+  if (fontSizeSelect) fontSizeSelect.value = savedFontSize
+  if (wordWrapCheck) wordWrapCheck.checked = savedWordWrap
+  if (themeSelect) themeSelect.value = savedTheme
+
+  const openSettings = () => {
+    settingsOverlay?.classList.add('active')
+    // Show first section by default
+    showSettingsSection('editor')
+  }
+
+  const closeSettings = () => {
+    settingsOverlay?.classList.remove('active')
+  }
+
+  // Navigation between settings sections
+  const showSettingsSection = (section: string) => {
+    document.querySelectorAll('.settings-nav-item').forEach(btn => {
+      btn.classList.toggle('active', (btn as HTMLElement).dataset.section === section)
+    })
+    document.querySelectorAll('.settings-section').forEach(sec => {
+      sec.classList.toggle('hidden', sec.id !== `settings-section-${section}`)
+    })
+  }
+
+  document.querySelectorAll('.settings-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const section = (btn as HTMLElement).dataset.section
+      if (section) showSettingsSection(section)
+    })
+  })
+
+  settingsBtn?.addEventListener('click', openSettings)
+  settingsClose?.addEventListener('click', closeSettings)
+  settingsOverlay?.addEventListener('click', e => {
+    if (e.target === settingsOverlay) closeSettings()
+  })
+
+  settingsSave?.addEventListener('click', () => {
+    const fontSize = (document.getElementById('setting-fontsize') as HTMLSelectElement)?.value
+    const wordWrap = (document.getElementById('setting-wordwrap') as HTMLInputElement)?.checked
+    const theme = (document.getElementById('setting-theme') as HTMLSelectElement)?.value
+
+    // Save settings
+    localStorage.setItem('saga-font-size', fontSize || '14')
+    localStorage.setItem('saga-word-wrap', String(wordWrap !== false))
+    localStorage.setItem('saga-theme', theme || 'glass')
+
+    // Apply theme immediately
+    document.documentElement.setAttribute('data-theme', theme || 'glass')
+
+    closeSettings()
+    showNotification('Settings saved!', 'success')
+  })
+
+  // About button - shows small alert
+  document.getElementById('btn-about')?.addEventListener('click', () => {
+    showAboutAlert()
+  })
+
+  // Load languages when settings opens
+  openSettings()
+  loadLanguages().catch(() => {})
+  closeSettings()
+}
+
+interface LanguageInfo {
+  id: string
+  name: string
+  installed: boolean
+  version?: string
+  icon: string
+}
+
+async function loadLanguages(): Promise<void> {
+  const container = document.getElementById('languages-list')
+  if (!container) return
+
+  try {
+    const result = await window.electronAPI?.checkLanguages()
+    if (result?.success && result.languages) {
+      renderLanguages(result.languages)
+    } else {
+      container.innerHTML = '<div class="languages-error">Failed to load languages</div>'
+    }
+  } catch {
+    container.innerHTML = '<div class="languages-error">Failed to load languages</div>'
+  }
+}
+
+function renderLanguages(languages: LanguageInfo[]): void {
+  const container = document.getElementById('languages-list')
+  if (!container) return
+
+  container.innerHTML = languages
+    .map(
+      lang => `
+    <div class="language-item ${lang.installed ? 'installed' : 'not-installed'}">
+      <span class="language-icon">${lang.icon}</span>
+      <div class="language-info">
+        <span class="language-name">${lang.name}</span>
+        <span class="language-version">${lang.installed ? lang.version || 'Installed' : 'Not installed'}</span>
+      </div>
+      ${
+        lang.installed
+          ? `<div class="language-actions">
+               <button class="language-check-btn" data-lang="${lang.id}" title="Check & Fix">🔍</button>
+               <button class="language-uninstall-btn" data-lang="${lang.id}">Uninstall</button>
+             </div>`
+          : `<button class="language-install-btn" data-lang="${lang.id}">Install</button>`
+      }
+    </div>
+  `
+    )
+    .join('')
+
+  container.querySelectorAll('.language-install-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const target = e.target as HTMLButtonElement
+      const langId = target.dataset.lang
+      if (!langId) return
+
+      target.disabled = true
+      target.textContent = 'Installing...'
+
+      const result = await window.electronAPI?.installLanguage(langId)
+      if (result?.success) {
+        showNotification(`${langId} installed successfully!`, 'success')
+        await loadLanguages()
+      } else {
+        showNotification(result?.error || 'Installation failed', 'error')
+        target.disabled = false
+        target.textContent = 'Install'
+      }
+    })
+  })
+
+  container.querySelectorAll('.language-uninstall-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const target = e.target as HTMLButtonElement
+      const langId = target.dataset.lang
+      if (!langId) return
+
+      const confirmed = confirm(`Are you sure you want to uninstall ${langId}?`)
+      if (!confirmed) return
+
+      target.disabled = true
+      target.textContent = 'Uninstalling...'
+
+      const result = await window.electronAPI?.uninstallLanguage(langId)
+      if (result?.success) {
+        showNotification(`${langId} uninstalled successfully!`, 'success')
+        await loadLanguages()
+      } else {
+        showNotification(result?.error || 'Uninstall failed', 'error')
+        target.disabled = false
+        target.textContent = 'Uninstall'
+      }
+    })
+  })
+
+  container.querySelectorAll('.language-check-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const target = e.target as HTMLButtonElement
+      const langId = target.dataset.lang
+      if (!langId) return
+
+      target.disabled = true
+      target.textContent = '🔄'
+
+      const result = await window.electronAPI?.checkLanguage(langId)
+      if (result?.success) {
+        if (result.fixed) {
+          showNotification(`${langId} fixed! Now using: ${result.path}`, 'success')
+        } else {
+          showNotification(`${langId} is working! Path: ${result.path}`, 'success')
+        }
+      } else {
+        showNotification(result?.error || `${langId} not found. Try installing.`, 'error')
+      }
+      await loadLanguages()
+    })
   })
 }
 
@@ -1816,7 +2444,19 @@ function updateOutline(): void {
   const lines = content.split('\n')
   const headings: Array<{ level: number; text: string; line: number }> = []
 
+  let inCodeBlock = false
+
   lines.forEach((line, index) => {
+    // Track code blocks
+    if (line.trim().startsWith('```') || line.trim().startsWith('~~~')) {
+      inCodeBlock = !inCodeBlock
+      return
+    }
+
+    // Skip lines inside code blocks
+    if (inCodeBlock) return
+
+    // Check for markdown headings
     const match = line.match(/^(#{1,6})\s+(.+)$/)
     if (match) {
       headings.push({

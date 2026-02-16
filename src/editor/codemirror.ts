@@ -1,9 +1,12 @@
 import { EditorView, keymap as cmKeymap, ViewPlugin, ViewUpdate } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
-import { markdown } from '@codemirror/lang-markdown'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
+import { indentOnInput, bracketMatching } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
+import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 
 // Type for the onChange callback
 export type EditorChangeCallback = (content: string) => void
@@ -49,38 +52,54 @@ const customTheme = EditorView.theme(
       color: 'var(--text-secondary)',
     },
     // Markdown syntax highlighting
-    '.cm-heading': {
+    '.cm-header-1, .cm-header-2, .cm-header-3, .cm-header-4, .cm-header-5, .cm-header-6': {
       color: 'var(--accent)',
       fontWeight: 'bold',
     },
-    '.cm-strong': {
+    '.cm-header-1': { fontSize: '1.6em' },
+    '.cm-header-2': { fontSize: '1.4em' },
+    '.cm-header-3': { fontSize: '1.2em' },
+    '.cm-formatting': {
+      color: 'var(--accent)',
+    },
+    '.cm-formatting-strong': {
+      color: '#ff7b72',
       fontWeight: 'bold',
-      color: '#ff79c6',
     },
-    '.cm-emphasis': {
+    '.cm-formatting-emphasis': {
+      color: '#d2a8ff',
       fontStyle: 'italic',
-      color: '#ffb86c',
     },
-    '.cm-link': {
-      color: '#8be9fd',
-      textDecoration: 'underline',
+    '.cm-formatting-code': {
+      color: '#79c0ff',
     },
-    '.cm-url': {
-      color: '#6272a4',
+    '.cm-formatting-link': {
+      color: '#7ee787',
     },
-    '.cm-code': {
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-      padding: '2px 4px',
-      borderRadius: '3px',
-      fontFamily: "'SF Mono', Monaco, monospace",
-    },
-    '.cm-blockquote': {
+    '.cm-formatting-quote': {
       color: 'var(--text-secondary)',
-      borderLeft: '3px solid var(--accent)',
-      paddingLeft: '12px',
+      fontStyle: 'italic',
     },
-    '.cm-list': {
-      color: 'var(--text-primary)',
+    '.cm-strikethrough': {
+      textDecoration: 'line-through',
+      color: 'var(--text-secondary)',
+    },
+    // Code fence markers styling
+    '.cm-meta': {
+      color: '#79c0ff',
+      backgroundColor: 'rgba(121, 192, 255, 0.1)',
+      borderRadius: '4px',
+      padding: '2px 6px',
+    },
+    '.cm-fencedChar': {
+      color: '#79c0ff',
+      backgroundColor: 'rgba(121, 192, 255, 0.15)',
+      borderRadius: '4px',
+      padding: '2px 8px',
+    },
+    // Code block styling in editor
+    '.cm-line': {
+      padding: '0 4px',
     },
     // Scrollbar styling
     '&.cm-editor ::-webkit-scrollbar': {
@@ -127,13 +146,70 @@ export function createCodeMirrorEditor(
       extensions: [
         // Basic setup
         history(),
-        cmKeymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+        cmKeymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...completionKeymap]),
 
-        // Language support
-        markdown(),
+        // Language support with syntax highlighting
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
+
+        // Autocompletion - markdown snippets
+        autocompletion({
+          override: [
+            context => {
+              const word = context.matchBefore(/[#*`\[\]!>\-~r]/)
+              if (!word) return null
+              return {
+                from: word.from,
+                options: [
+                  { label: '#', apply: '# ', detail: 'Heading 1' },
+                  { label: '##', apply: '## ', detail: 'Heading 2' },
+                  { label: '###', apply: '### ', detail: 'Heading 3' },
+                  { label: '####', apply: '#### ', detail: 'Heading 4' },
+                  { label: '#####', apply: '##### ', detail: 'Heading 5' },
+                  { label: '######', apply: '###### ', detail: 'Heading 6' },
+                  { label: '**bold**', apply: '****', detail: 'Bold text', insert: '****' },
+                  { label: '*italic*', apply: '**', detail: 'Italic text', insert: '**' },
+                  {
+                    label: '***bold italic***',
+                    apply: '*****',
+                    detail: 'Bold + Italic',
+                    insert: '*****',
+                  },
+                  { label: '`code`', apply: '``', detail: 'Inline code' },
+                  { label: '```', apply: '```\n \n```', detail: 'Code block' },
+                  // Supported languages with run only
+                  {
+                    label: '```python run',
+                    apply: '```python run\n \n```',
+                    detail: 'Python (runnable)',
+                  },
+                  {
+                    label: '```javascript run',
+                    apply: '```javascript run\n \n```',
+                    detail: 'JavaScript (runnable)',
+                  },
+                  {
+                    label: '```ruby run',
+                    apply: '```ruby run\n \n```',
+                    detail: 'Ruby (runnable)',
+                  },
+                  { label: '```php run', apply: '```php run\n \n```', detail: 'PHP (runnable)' },
+                  {
+                    label: '```perl run',
+                    apply: '```perl run\n \n```',
+                    detail: 'Perl (runnable)',
+                  },
+                ],
+              }
+            },
+          ],
+        }),
 
         // Search
         highlightSelectionMatches(),
+
+        // Auto-indentation and bracket matching
+        indentOnInput(),
+        bracketMatching(),
 
         // Theme
         oneDark,
