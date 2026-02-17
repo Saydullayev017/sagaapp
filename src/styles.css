@@ -1995,8 +1995,8 @@ body {
 
 /* Scrollbar styles */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -2004,26 +2004,26 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Preview pane scrollbar */
-.preview-pane::-webkit-scrollbar {
-  width: 3px;
-}
-
-.preview-pane::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 1.5px;
 }
 
-.preview-pane::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Preview pane scrollbar */
+.preview-pane::-webkit-scrollbar {
+  width: 2px;
+}
+
+.preview-pane::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 1px;
+}
+
+.preview-pane::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Selection */
