@@ -271,13 +271,17 @@ const customTheme = EditorView.theme(
 export function createCodeMirrorEditor(
   parent: HTMLElement,
   initialContent: string = '',
-  onChange?: EditorChangeCallback
+  onChange?: EditorChangeCallback,
+  onSelectionChange?: () => void
 ): EditorView {
   const updateListener = ViewPlugin.fromClass(
     class {
       update(update: ViewUpdate) {
         if (update.docChanged && onChange) {
           onChange(update.state.doc.toString())
+        }
+        if (update.selectionSet && onSelectionChange) {
+          onSelectionChange()
         }
       }
     }

@@ -3251,3 +3251,23 @@ body {
   border-color: var(--accent);
   color: white;
 }
+
+/* Focus effect for current editing element in preview */
+.preview-content .focused {
+  outline: 2px solid rgba(108, 99, 255, 0.3);
+  outline-offset: 4px;
+  background: rgba(108, 99, 255, 0.05);
+  border-radius: 4px;
+  animation: focus-pulse 2s ease-in-out infinite;
+}
+
+@keyframes focus-pulse {
+  0%, 100% {
+    outline-color: rgba(108, 99, 255, 0.2);
+    background: rgba(108, 99, 255, 0.03);
+  }
+  50% {
+    outline-color: rgba(108, 99, 255, 0.4);
+    background: rgba(108, 99, 255, 0.08);
+  }
+}
