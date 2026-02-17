@@ -1007,8 +1007,11 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-secondary);
   padding: 20px;
+  padding-right: 12px;
+  box-sizing: border-box;
   opacity: 1;
   transform: translateX(0);
   transition:
