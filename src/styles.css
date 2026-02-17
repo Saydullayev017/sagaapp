@@ -664,6 +664,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-radius: 10px;
 }
 
 [data-theme='glass'] .editor-toolbar {
@@ -907,7 +908,7 @@ body {
 
 /* Terminal Resize Handle */
 .terminal-resize-handle {
-  height: 4px;
+  height: 1px;
   background: var(--border-color);
   cursor: ns-resize;
   transition: background 0.2s;
@@ -1082,8 +1083,6 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-[data-theme='glass'] .bottom-panel {
-}
 
 .terminal-output {
   flex: 1;
@@ -2853,9 +2852,6 @@ body {
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid var(--border-color);
-}
-
-.settings-option:last-child {
 }
 
 .settings-option span {

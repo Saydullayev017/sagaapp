@@ -191,6 +191,12 @@ export function initializeUI(): void {
       <main class="editor-container">
         <div class="editor-toolbar">
           <div class="toolbar-left">
+            <button class="toolbar-btn" id="btn-toggle-sidebar" title="Toggle Sidebar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+              </svg>
+            </button>
             <button class="toolbar-btn" id="btn-toggle-terminal" title="Toggle Terminal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                 <polyline points="4 17 10 11 4 5"></polyline>
@@ -208,8 +214,8 @@ export function initializeUI(): void {
           <div class="toolbar-center"></div>
           <div class="toolbar-right">
             <div class="view-mode-toggle">
-              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
-              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
+              <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">E</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">P</button>
             </div>
           </div>
         </div>
@@ -495,6 +501,7 @@ function setupEventListeners(): void {
   document.getElementById('btn-rename')?.addEventListener('click', renameSelectedItem)
 
   // Terminal toggle button
+  document.getElementById('btn-toggle-sidebar')?.addEventListener('click', toggleSidebar)
   document.getElementById('btn-toggle-terminal')?.addEventListener('click', toggleTerminal)
   document.getElementById('btn-toggle-outline')?.addEventListener('click', toggleOutline)
 
