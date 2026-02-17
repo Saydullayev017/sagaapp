@@ -13,6 +13,8 @@ import {
   ViewUpdate,
   Decoration,
   DecorationSet,
+  highlightActiveLine,
+  highlightActiveLineGutter,
 } from '@codemirror/view'
 
 // Type for the onChange callback
@@ -188,7 +190,11 @@ const customTheme = EditorView.theme(
       backgroundColor: 'rgba(108, 99, 255, 0.3)',
     },
     '.cm-activeLine': {
-      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: 'rgba(108, 99, 255, 0.1)',
+      color: 'var(--accent)',
     },
     '.cm-gutters': {
       backgroundColor: 'var(--bg-secondary)',
@@ -271,17 +277,13 @@ const customTheme = EditorView.theme(
 export function createCodeMirrorEditor(
   parent: HTMLElement,
   initialContent: string = '',
-  onChange?: EditorChangeCallback,
-  onSelectionChange?: () => void
+  onChange?: EditorChangeCallback
 ): EditorView {
   const updateListener = ViewPlugin.fromClass(
     class {
       update(update: ViewUpdate) {
         if (update.docChanged && onChange) {
           onChange(update.state.doc.toString())
-        }
-        if (update.selectionSet && onSelectionChange) {
-          onSelectionChange()
         }
       }
     }
@@ -353,6 +355,10 @@ export function createCodeMirrorEditor(
 
         // Search
         highlightSelectionMatches(),
+
+        // Active line highlight
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
 
         // Auto-indentation and bracket matching
         indentOnInput(),

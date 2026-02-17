@@ -1050,14 +1050,7 @@ function setupCodeMirrorEditor(): void {
       if (previewPane && !previewPane.classList.contains('hidden')) {
         updatePreview()
       }
-    }, 300),
-    () => {
-      // Update focus highlight on cursor move
-      const previewPane = document.getElementById('preview-pane')
-      if (previewPane && !previewPane.classList.contains('hidden')) {
-        updatePreviewFocus()
-      }
-    }
+    }, 300)
   )
 }
 
@@ -1099,57 +1092,6 @@ async function updatePreview(): Promise<void> {
 
   // Add event listeners for run code buttons
   setupCodeExecution()
-
-  // Update focus highlight
-  updatePreviewFocus()
-}
-
-function updatePreviewFocus(): void {
-  const previewContent = document.getElementById('preview-content')
-  if (!cmEditor || !previewContent) return
-
-  // Remove existing focus
-  const existingFocus = previewContent.querySelector('.focused')
-  if (existingFocus) {
-    existingFocus.classList.remove('focused')
-  }
-
-  // Get current cursor position
-  const selection = cmEditor.state.selection.main
-  const cursorPos = selection.head
-
-  // Get content before cursor
-  const content = getEditorContent(cmEditor)
-  const textBeforeCursor = content.slice(0, cursorPos)
-
-  // Find which block the cursor is in
-  const lines = textBeforeCursor.split('\n')
-  const currentLineNum = lines.length - 1
-  const currentLine = lines[currentLineNum]
-
-  // Find the corresponding element in preview
-  const blockElements = previewContent.querySelectorAll(
-    'blockquote, h1, h2, h3, h4, h5, h6, p, ul, ol, pre, li'
-  )
-
-  // Simple mapping: find block by approximate line number
-  const blockArray = Array.from(blockElements)
-  let elementIndex = 0
-  let lineCount = 0
-
-  for (const block of blockArray) {
-    const text = block.textContent || ''
-    const blockLines = text.split('\n').length
-    lineCount += blockLines
-
-    if (lineCount >= currentLineNum) {
-      block.classList.add('focused')
-      // Scroll element into view
-      block.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      break
-    }
-    elementIndex++
-  }
 }
 
 function setupCodeExecution(): void {
