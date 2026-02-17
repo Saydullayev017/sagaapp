@@ -23,7 +23,9 @@
 
 /* CodeMirror editor styling */
 .codemirror-container .cm-editor .cm-content {
-  padding: 16px;
+  padding-top: 35px;
+  padding-left: 70px;
+  padding-right: 70px;
 }
 
 /* General content styling */
@@ -1027,6 +1029,9 @@ body {
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
 }
 
 /* Bottom Panel */
@@ -1333,6 +1338,8 @@ body {
 .preview-content p {
   margin-bottom: 16px;
   line-height: 1.6;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .preview-content code {
@@ -1753,6 +1760,8 @@ body {
 .preview-content p {
   margin-bottom: 16px;
   line-height: 1.6;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .preview-content code {
