@@ -340,28 +340,110 @@ export function createCodeMirrorEditor(
                     insert: '*****',
                   },
                   { label: '`code`', apply: '``', detail: 'Inline code' },
-                  { label: '```', apply: '```\n \n```', detail: 'Code block' },
+                  {
+                    label: '```',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```\n\n```'
+                      const cursorPos = from + 4 // Position after "```\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
+                    detail: 'Code block',
+                  },
                   // Supported languages with run only
                   {
                     label: '```python run',
-                    apply: '```python run\n \n```',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```python run\n\n```'
+                      const cursorPos = from + 16 // Position after "```python run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
                     detail: 'Python (runnable)',
                   },
                   {
                     label: '```javascript run',
-                    apply: '```javascript run\n \n```',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```javascript run\n\n```'
+                      const cursorPos = from + 22 // Position after "```javascript run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
                     detail: 'JavaScript (runnable)',
                   },
                   {
                     label: '```ruby run',
-                    apply: '```ruby run\n \n```',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```ruby run\n\n```'
+                      const cursorPos = from + 16 // Position after "```ruby run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
                     detail: 'Ruby (runnable)',
                   },
-                  { label: '```php run', apply: '```php run\n \n```', detail: 'PHP (runnable)' },
+                  {
+                    label: '```php run',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```php run\n\n```'
+                      const cursorPos = from + 15 // Position after "```php run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
+                    detail: 'PHP (runnable)',
+                  },
                   {
                     label: '```perl run',
-                    apply: '```perl run\n \n```',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```perl run\n\n```'
+                      const cursorPos = from + 16 // Position after "```perl run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
                     detail: 'Perl (runnable)',
+                  },
+                  {
+                    label: '```bash run',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```bash run\n\n```'
+                      const cursorPos = from + 16 // Position after "```bash run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
+                    detail: 'Bash (runnable)',
+                  },
+                  {
+                    label: '```java run',
+                    apply: (view, completion, from, to) => {
+                      const insertion = '```java run\n\n```'
+                      const cursorPos = from + 16 // Position after "```java run\n"
+                      view.dispatch({
+                        changes: { from, to, insert: insertion },
+                        selection: { anchor: cursorPos },
+                      })
+                      return true
+                    },
+                    detail: 'Java (runnable)',
                   },
                 ],
               }
