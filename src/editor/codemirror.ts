@@ -318,6 +318,8 @@ export function createCodeMirrorEditor(
 
         // Autocompletion - markdown snippets
         autocompletion({
+          defaultKeymap: true,
+          activateOnTyping: true,
           override: [
             context => {
               const word = context.matchBefore(/[#*`\[\]!>\-~r]/)
@@ -341,7 +343,6 @@ export function createCodeMirrorEditor(
                   },
                   { label: '`code`', apply: '``', detail: 'Inline code' },
                   { label: '```', insert: '```\n$0\n```', detail: 'Code block' },
-                  // Supported languages with run only
                   {
                     label: '```python run',
                     insert: '```python run\n$0\n```',
