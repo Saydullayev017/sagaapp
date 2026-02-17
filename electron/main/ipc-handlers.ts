@@ -429,6 +429,155 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Git blame handler
+  ipcMain.handle('git-blame', async (_event, cwd: string, filePath: string) => {
+    try {
+      // Use simple format that's easier to parse
+      const { stdout } = await execAsync(`git blame --format="%H|%an|%ae|%ai" -w "${filePath}"`, {
+        cwd,
+        maxBuffer: 10 * 1024 * 1024,
+      })
+
+      const blame: Array<{
+        hash: string
+        author: string
+        email: string
+        date: string
+        line: number
+        content: string
+      }> = []
+
+      const lines = stdout.split('\n')
+      let lineNum = 0
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+
+        // Skip empty lines
+        if (!line.trim()) continue
+
+        // Skip lines that start with ^ (non-committed files)
+        if (line.startsWith('^')) continue
+
+        // Find the first TAB which separates metadata from content
+        const tabIndex = line.indexOf('\t')
+        if (tabIndex === -1) continue
+
+        const metadata = line.substring(0, tabIndex)
+        let content = line.substring(tabIndex + 1)
+
+        // If content is empty, try to get from next line
+        if (!content.trim() && i + 1 < lines.length) {
+          content = lines[i + 1]
+        }
+
+        const parts = metadata.split('|')
+        if (parts.length >= 3) {
+          lineNum++
+          blame.push({
+            hash: parts[0]?.substring(0, 7) || '',
+            author: parts[1] || '',
+            email: parts[2] || '',
+            date: parts[3] || '',
+            line: lineNum,
+            content: content,
+          })
+        }
+      }
+
+      console.log('[GitBlame] Parsed', blame.length, 'lines')
+      return { success: true, blame }
+    } catch (error: any) {
+      console.error('[GitBlame] Error:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git log handler - get commit history
+  ipcMain.handle('git-log', async (_event, cwd: string, filePath?: string, limit?: number) => {
+    try {
+      const maxCount = limit || 50
+      const cmd = filePath
+        ? `git log --oneline -${maxCount} -- "${filePath}"`
+        : `git log --oneline -${maxCount}`
+      const { stdout } = await execAsync(cmd, { cwd })
+
+      const commits = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const match = line.match(/^([a-f0-9]+)\s+(.*)$/)
+          if (match) {
+            return { hash: match[1], message: match[2] }
+          }
+          return { hash: '', message: line }
+        })
+
+      return { success: true, commits }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git show handler - get commit details
+  ipcMain.handle('git-show', async (_event, cwd: string, hash: string) => {
+    try {
+      const { stdout: messageStdout } = await execAsync(
+        `git log -1 --format="%H|%an|%ae|%ai|%s" ${hash}`,
+        { cwd }
+      )
+      const [commitHash, author, email, date, message] = messageStdout.trim().split('|')
+
+      const { stdout: diffStdout } = await execAsync(`git show ${hash} --stat --format=""`, { cwd })
+
+      return {
+        success: true,
+        commit: {
+          hash: commitHash,
+          shortHash: commitHash?.substring(0, 7) || '',
+          author: author || '',
+          email: email || '',
+          date: date || '',
+          message: message || '',
+          files: diffStdout.trim().split('\n').filter(Boolean),
+        },
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git file history
+  ipcMain.handle(
+    'git-file-history',
+    async (_event, cwd: string, filePath: string, limit?: number) => {
+      try {
+        const maxCount = limit || 20
+        const { stdout } = await execAsync(
+          `git log --oneline --follow -${maxCount} -- "${filePath}"`,
+          { cwd }
+        )
+
+        const history = stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map(line => {
+            const match = line.match(/^([a-f0-9]+)\s+(.*)$/)
+            if (match) {
+              return { hash: match[1], message: match[2] }
+            }
+            return { hash: '', message: line }
+          })
+
+        return { success: true, history }
+      } catch (error: any) {
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
   // File/Folder creation handlers
   ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
     try {

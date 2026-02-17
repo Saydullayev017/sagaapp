@@ -79,6 +79,55 @@ export interface ElectronAPI {
     branchName: string
   ) => Promise<{ success: boolean; output?: string; error?: string }>
   gitBranchList: (cwd: string) => Promise<{ success: boolean; branches?: string[]; error?: string }>
+  gitBlame: (
+    cwd: string,
+    filePath: string
+  ) => Promise<{
+    success: boolean
+    blame?: Array<{
+      hash: string
+      author: string
+      email: string
+      date: string
+      line: number
+      content: string
+    }>
+    error?: string
+  }>
+  gitLog: (
+    cwd: string,
+    filePath?: string,
+    limit?: number
+  ) => Promise<{
+    success: boolean
+    commits?: Array<{ hash: string; message: string }>
+    error?: string
+  }>
+  gitShow: (
+    cwd: string,
+    hash: string
+  ) => Promise<{
+    success: boolean
+    commit?: {
+      hash: string
+      shortHash: string
+      author: string
+      email: string
+      date: string
+      message: string
+      files: string[]
+    }
+    error?: string
+  }>
+  gitFileHistory: (
+    cwd: string,
+    filePath: string,
+    limit?: number
+  ) => Promise<{
+    success: boolean
+    history?: Array<{ hash: string; message: string }>
+    error?: string
+  }>
   executeCommand: (
     cwd: string,
     command: string
@@ -213,6 +262,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('git-checkout', cwd, branchName),
   gitMerge: (cwd: string, branchName: string) => ipcRenderer.invoke('git-merge', cwd, branchName),
   gitBranchList: (cwd: string) => ipcRenderer.invoke('git-branch-list', cwd),
+  gitBlame: (cwd: string, filePath: string) => ipcRenderer.invoke('git-blame', cwd, filePath),
+  gitLog: (cwd: string, filePath?: string, limit?: number) =>
+    ipcRenderer.invoke('git-log', cwd, filePath, limit),
+  gitShow: (cwd: string, hash: string) => ipcRenderer.invoke('git-show', cwd, hash),
+  gitFileHistory: (cwd: string, filePath: string, limit?: number) =>
+    ipcRenderer.invoke('git-file-history', cwd, filePath, limit),
   executeCommand: (cwd: string, command: string) =>
     ipcRenderer.invoke('execute-command', cwd, command),
 

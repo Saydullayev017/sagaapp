@@ -6,7 +6,6 @@ import {
   getEditorContent,
   setEditorContent,
   getCursorPosition,
-  toggleMarkdownHidden,
 } from '../editor/codemirror'
 import { parseMarkdown } from '../editor/markdown-parser'
 import { debounce, escapeHtml, showNotify } from '../utils/dom'
@@ -151,6 +150,9 @@ export function initializeUI(): void {
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
           </button>
+          <button class="sidebar-action-btn" id="btn-settings" title="Settings" style="margin-left: auto;">
+            ⚙
+          </button>
         </div>
         <div class="file-tree-search">
           <input type="text" id="tree-search" placeholder="Search files..." />
@@ -204,14 +206,6 @@ export function initializeUI(): void {
           </div>
           <div class="toolbar-center"></div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="btn-markdown-hide" title="Toggle Markdown Syntax">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                <line x1="1" y1="1" x2="23" y2="23"></line>
-              </svg>
-              <span>Zen</span>
-            </button>
-            <button class="toolbar-btn" id="btn-settings" title="Settings">⚙</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -236,9 +230,22 @@ export function initializeUI(): void {
         <!-- Bottom Panel: Terminal -->
         <div class="terminal-resize-handle" id="terminal-resize" style="display: none;"></div>
         <div class="bottom-panel" id="bottom-panel" style="display: none;">
-          <div class="terminal-tabs">
-            <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
-            <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+          <div class="terminal-header">
+            <div class="terminal-tabs">
+              <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+              <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+            </div>
+            <div class="terminal-actions">
+              <button class="terminal-action-btn" id="btn-gitlens" title="GitLens">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <line x1="12" y1="3" x2="12" y2="9"></line>
+                  <line x1="12" y1="15" x2="12" y2="21"></line>
+                  <line x1="3" y1="12" x2="9" y2="12"></line>
+                  <line x1="15" y1="12" x2="21" y2="12"></line>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="terminal-panels">
             <div class="terminal-panel active" data-terminal="1">
@@ -253,21 +260,47 @@ export function initializeUI(): void {
       
       <!-- Right Panel: Outline -->
       <aside class="outline-panel" id="outline-panel">
-        <div class="outline-header">
-          <h3>Outline</h3>
+        <div class="outline-tabs">
+          <button class="outline-tab active" data-view="outline">Outline</button>
+          <button class="outline-tab" data-view="git">Git</button>
+          <button class="outline-tab" data-view="gitlens">GitLens</button>
         </div>
-        <div class="outline-content" id="outline-content">
-          <div class="outline-empty">Open a file to see outline</div>
-        </div>
-        <div class="git-panel">
-          <div class="git-panel-header">
-            <h3>Git</h3>
-            <span class="git-current-branch" id="git-current-branch">-</span>
+        
+        <!-- Outline View -->
+        <div class="outline-view active" id="outline-view">
+          <div class="outline-header">
+            <h3>Outline</h3>
           </div>
-          <div class="git-panel-actions">
-            <button class="git-btn" id="git-btn-new-branch">New Branch</button>
-            <button class="git-btn" id="git-btn-commit">Commit</button>
-            <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+          <div class="outline-content" id="outline-content">
+            <div class="outline-empty">Open a file to see outline</div>
+          </div>
+        </div>
+        
+        <!-- Git View -->
+        <div class="outline-view" id="git-view">
+          <div class="git-panel">
+            <div class="git-panel-header">
+              <h3>Git</h3>
+              <span class="git-current-branch" id="git-current-branch">-</span>
+            </div>
+            <div class="git-panel-actions">
+              <button class="git-btn" id="git-btn-new-branch">New Branch</button>
+              <button class="git-btn" id="git-btn-commit">Commit</button>
+              <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- GitLens View -->
+        <div class="outline-view" id="gitlens-view">
+          <div class="gitlens-header">
+            <h3>GitLens</h3>
+            <div class="gitlens-tabs">
+              <button class="gitlens-tab active" data-gitlens="history">History</button>
+            </div>
+          </div>
+          <div class="gitlens-content" id="gitlens-content">
+            <div class="gitlens-empty">Open a file to see history</div>
           </div>
         </div>
       </aside>
@@ -322,6 +355,10 @@ export function initializeUI(): void {
               <span class="settings-nav-icon">🎨</span>
               <span>Appearance</span>
             </button>
+            <button class="settings-nav-item" data-section="terminal">
+              <span class="settings-nav-icon">💻</span>
+              <span>Terminal</span>
+            </button>
             <button class="settings-nav-item" data-section="languages">
               <span class="settings-nav-icon">💻</span>
               <span>Languages</span>
@@ -367,6 +404,15 @@ export function initializeUI(): void {
                 </select>
               </label>
             </div>
+            <!-- Terminal Section -->
+            <div class="settings-section hidden" id="settings-section-terminal">
+              <h4>Terminal</h4>
+              <label class="settings-option">
+                <span>Enable Terminal</span>
+                <input type="checkbox" id="setting-terminal-enabled" checked />
+              </label>
+              <p class="settings-info">When enabled, the Terminal button will be visible in the toolbar and you can use the integrated terminal.</p>
+            </div>
             <!-- Languages Section -->
             <div class="settings-section hidden" id="settings-section-languages">
               <h4>Code Execution</h4>
@@ -397,6 +443,10 @@ export function initializeUI(): void {
 
   // Загружаем тему
   loadTheme()
+
+  // Обновляем видимость кнопки терминала
+  const terminalEnabled = localStorage.getItem('saga-terminal-enabled') !== 'false'
+  updateTerminalButtonVisibility(terminalEnabled)
 
   // Добавляем обработчики событий
   setupEventListeners()
@@ -438,12 +488,28 @@ function setupEventListeners(): void {
   document.getElementById('btn-toggle-terminal')?.addEventListener('click', toggleTerminal)
   document.getElementById('btn-toggle-outline')?.addEventListener('click', toggleOutline)
 
-  // Markdown Zen mode toggle
-  document.getElementById('btn-markdown-hide')?.addEventListener('click', () => {
-    if (cmEditor) {
-      toggleMarkdownHidden(cmEditor)
-      const btn = document.getElementById('btn-markdown-hide')
-      btn?.classList.toggle('active')
+  // GitLens button in terminal
+  document.getElementById('btn-gitlens')?.addEventListener('click', () => {
+    if (state.currentFolder) {
+      const outlinePanel = document.getElementById('outline-panel')
+      if (outlinePanel) {
+        state.outlineVisible = true
+        outlinePanel.style.display = 'flex'
+        document.getElementById('resize-outline')?.removeAttribute('style')
+
+        // Switch to GitLens tab
+        document.querySelectorAll('.outline-tab').forEach(t => t.classList.remove('active'))
+        document.querySelector('.outline-tab[data-view="gitlens"]')?.classList.add('active')
+        document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
+        document.getElementById('gitlens-view')?.classList.add('active')
+
+        // Load history info
+        if (state.currentFile) {
+          loadGitHistory()
+        }
+      }
+    } else {
+      showNotify('Open a folder first to use Git', 'info')
     }
   })
 
@@ -1933,15 +1999,20 @@ function setupSettingsModal(): void {
   const fontSizeSelect = document.getElementById('setting-fontsize') as HTMLSelectElement
   const wordWrapCheck = document.getElementById('setting-wordwrap') as HTMLInputElement
   const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement
+  const terminalEnabledCheck = document.getElementById(
+    'setting-terminal-enabled'
+  ) as HTMLInputElement
 
   // Load saved settings
   const savedFontSize = localStorage.getItem('saga-font-size') || '14'
   const savedWordWrap = localStorage.getItem('saga-word-wrap') !== 'false'
   const savedTheme = localStorage.getItem('saga-theme') || 'glass'
+  const savedTerminalEnabled = localStorage.getItem('saga-terminal-enabled') !== 'false'
 
   if (fontSizeSelect) fontSizeSelect.value = savedFontSize
   if (wordWrapCheck) wordWrapCheck.checked = savedWordWrap
   if (themeSelect) themeSelect.value = savedTheme
+  if (terminalEnabledCheck) terminalEnabledCheck.checked = savedTerminalEnabled
 
   const openSettings = () => {
     settingsOverlay?.classList.add('active')
@@ -1980,14 +2051,21 @@ function setupSettingsModal(): void {
     const fontSize = (document.getElementById('setting-fontsize') as HTMLSelectElement)?.value
     const wordWrap = (document.getElementById('setting-wordwrap') as HTMLInputElement)?.checked
     const theme = (document.getElementById('setting-theme') as HTMLSelectElement)?.value
+    const terminalEnabled = (
+      document.getElementById('setting-terminal-enabled') as HTMLInputElement
+    )?.checked
 
     // Save settings
     localStorage.setItem('saga-font-size', fontSize || '14')
     localStorage.setItem('saga-word-wrap', String(wordWrap !== false))
     localStorage.setItem('saga-theme', theme || 'glass')
+    localStorage.setItem('saga-terminal-enabled', String(terminalEnabled))
 
     // Apply theme immediately
     document.documentElement.setAttribute('data-theme', theme || 'glass')
+
+    // Update terminal button visibility
+    updateTerminalButtonVisibility(terminalEnabled)
 
     closeSettings()
     showNotify('Settings saved!', 'success')
@@ -2337,6 +2415,21 @@ async function renameSelectedItem(): Promise<void> {
   }
 }
 
+// Update terminal button visibility based on settings
+function updateTerminalButtonVisibility(enabled: boolean): void {
+  const btn = document.getElementById('btn-toggle-terminal')
+  if (btn) {
+    btn.style.display = enabled ? 'flex' : 'none'
+  }
+  // If terminal is disabled, hide the bottom panel
+  if (!enabled) {
+    const bottomPanel = document.getElementById('bottom-panel')
+    const terminalResizeHandle = document.getElementById('terminal-resize')
+    if (bottomPanel) bottomPanel.style.display = 'none'
+    if (terminalResizeHandle) terminalResizeHandle.style.display = 'none'
+  }
+}
+
 // Terminal Toggle
 function toggleTerminal(): void {
   const bottomPanel = document.getElementById('bottom-panel')
@@ -2482,8 +2575,105 @@ function updateOutline(): void {
 }
 
 function setupOutline(): void {
-  // Outline is updated via the debounced callback in setupCodeMirrorEditor
-  // This function is kept for potential future extensions
+  // Outline tabs switching
+  document.querySelectorAll('.outline-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const view = (tab as HTMLElement).dataset.view
+      if (!view) return
+
+      // Update tab active state
+      document.querySelectorAll('.outline-tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+
+      // Show corresponding view
+      document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
+      document.getElementById(`${view}-view`)?.classList.add('active')
+
+      // Load GitLens history when switching to gitlens view
+      if (view === 'gitlens' && state.currentFile && state.currentFolder) {
+        loadGitHistory()
+      }
+    })
+  })
+
+  // GitLens tabs switching
+  document.querySelectorAll('.gitlens-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const view = (tab as HTMLElement).dataset.gitlens
+      if (!view) return
+
+      document.querySelectorAll('.gitlens-tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+
+      // Load data for the selected view
+      if (state.currentFile && state.currentFolder) {
+        if (view === 'history') {
+          loadGitHistory()
+        }
+      }
+    })
+  })
+}
+
+async function loadGitHistory(): Promise<void> {
+  const content = document.getElementById('gitlens-content')
+  if (!content || !state.currentFile || !state.currentFolder) {
+    if (content) content.innerHTML = '<div class="gitlens-empty">Open a file to see history</div>'
+    return
+  }
+
+  content.innerHTML = '<div class="gitlens-empty">Loading history...</div>'
+
+  try {
+    const result = await window.electronAPI?.gitFileHistory(
+      state.currentFolder,
+      state.currentFile,
+      30
+    )
+    if (result?.success && result.history) {
+      content.innerHTML = result.history
+        .map(
+          item => `
+        <div class="gitlens-history-item" data-hash="${item.hash}">
+          <div class="gitlens-history-hash">${item.hash}</div>
+          <div class="gitlens-history-message">${escapeHtml(item.message)}</div>
+        </div>
+      `
+        )
+        .join('')
+
+      // Add click handlers
+      content.querySelectorAll('.gitlens-history-item').forEach(item => {
+        item.addEventListener('click', async () => {
+          const hash = (item as HTMLElement).dataset.hash
+          if (hash) {
+            await showCommitDetails(hash)
+          }
+        })
+      })
+    } else {
+      content.innerHTML = `<div class="gitlens-empty">${result?.error || 'No history available'}</div>`
+    }
+  } catch (error) {
+    content.innerHTML = '<div class="gitlens-empty">Failed to load history</div>'
+  }
+}
+
+async function showCommitDetails(hash: string): Promise<void> {
+  if (!state.currentFolder) return
+
+  try {
+    const result = await window.electronAPI?.gitShow(state.currentFolder, hash)
+    if (result?.success && result.commit) {
+      const commit = result.commit
+      showNotify(
+        `${commit.shortHash} - ${commit.author}: ${commit.message.substring(0, 50)}...`,
+        'info'
+      )
+    }
+  } catch (error) {
+    showNotify('Failed to load commit details', 'error')
+  }
 }
 
 // Git Workflow Functions
