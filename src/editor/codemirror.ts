@@ -52,11 +52,23 @@ const lineStartPatterns = [
   /^\d+\.\s+/,
 ]
 
+// Inline markdown patterns to hide
+const inlinePatterns = [
+  /(\*\*\*)(\s*)(?=\S)/g, // ***bold italic***
+  /(___)(\s*)(?=\S)/g, // ___bold italic___
+  /(\*\*)(\s*)(?=\S)/g, // **bold**
+  /(__)(\s*)(?=\S)/g, // __bold__
+  /(\*)(\s*)(?=\S)/g, // *italic*
+  /(_)(\s*)(?=\S)/g, // _italic_
+  /(`)(\s*)(?=\S)/g, // `inline code`
+  /(~~)(\s*)(?=\S)/g, // ~~strikethrough~~
+]
+
 // Helper: get line info for markdown
 function getLineMarkdownRanges(lineText: string): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = []
 
-  // Check each pattern at line start
+  // Check line start patterns
   for (const pattern of lineStartPatterns) {
     const match = pattern.exec(lineText)
     if (match && match.index === 0 && match[0].length > 0) {
@@ -129,7 +141,8 @@ const markdownAutoHidePlugin = ViewPlugin.fromClass(
 // Theme extension for hidden markdown
 const markdownHiddenTheme = EditorView.theme({
   '.cm-md-hidden': {
-    color: 'rgba(108, 99, 255, 0.35) !important',
+    color: 'transparent !important',
+    textShadow: 'none',
   },
 })
 
