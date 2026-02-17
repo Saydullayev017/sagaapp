@@ -55,6 +55,7 @@ interface UIState {
   fileTree: FileTreeState
   activeTerminal: number
   terminalCount: number
+  terminalIds: number[]
   terminals: { [key: string]: { terminal: Terminal; fitAddon: FitAddon } }
   terminalHeight: number
   gitChanges: {
@@ -88,6 +89,7 @@ const state: UIState = {
 
   activeTerminal: 1,
   terminalCount: 1,
+  terminalIds: [1],
   terminals: {},
   terminalHeight: 0,
   gitChanges: {
@@ -193,7 +195,6 @@ export function initializeUI(): void {
                 <polyline points="4 17 10 11 4 5"></polyline>
                 <line x1="12" y1="19" x2="20" y2="19"></line>
               </svg>
-              <span>Terminal</span>
             </button>
             <button class="toolbar-btn" id="btn-toggle-outline" title="Toggle Outline">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -201,7 +202,6 @@ export function initializeUI(): void {
                 <line x1="3" y1="12" x2="15" y2="12"></line>
                 <line x1="3" y1="18" x2="18" y2="18"></line>
               </svg>
-              <span>Outline</span>
             </button>
           </div>
           <div class="toolbar-center"></div>
@@ -220,6 +220,26 @@ export function initializeUI(): void {
               <div class="tabs-container" id="tabs-container"></div>
             </div>
             <div class="codemirror-container" id="codemirror-editor"></div>
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcome-screen">
+              <div class="welcome-logo">📝</div>
+              <h2>Welcome to Saga</h2>
+              <p>Open a folder and select a file to start editing</p>
+              <div class="welcome-shortcuts">
+                <div class="shortcut">
+                  <span class="key">Ctrl</span> + <span class="key">O</span>
+                  <span class="desc">Open Folder</span>
+                </div>
+                <div class="shortcut">
+                  <span class="key">Ctrl</span> + <span class="key">N</span>
+                  <span class="desc">New File</span>
+                </div>
+                <div class="shortcut">
+                  <span class="key">Ctrl</span> + <span class="key">P</span>
+                  <span class="desc">Quick Open</span>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div class="preview-pane hidden" id="preview-pane">
@@ -232,7 +252,10 @@ export function initializeUI(): void {
         <div class="bottom-panel" id="bottom-panel" style="display: none;">
           <div class="terminal-header">
             <div class="terminal-tabs">
-              <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+              <button class="terminal-tab active" data-terminal="1" id="terminal-tab-1">
+                <span>Terminal 1</span>
+                <span class="terminal-tab-close" data-close="1">×</span>
+              </button>
               <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
             </div>
             <div class="terminal-actions">
@@ -279,38 +302,36 @@ export function initializeUI(): void {
         
         <!-- Git View -->
         <div class="outline-view" id="git-view">
-          <div class="git-panel">
-            <div class="git-panel-header">
-              <h3>Git</h3>
-              <span class="git-current-branch" id="git-current-branch">-</span>
-            </div>
-            <div class="git-panel-actions">
-              <button class="git-btn" id="git-btn-commit">Commit</button>
-              <button class="git-btn" id="git-btn-push">Push</button>
-              <button class="git-btn" id="git-btn-pull">Pull</button>
-              <button class="git-btn" id="git-btn-new-branch">New Branch</button>
-            </div>
+          <div class="section-header">
+            <h3>Git</h3>
+            <span class="git-current-branch" id="git-current-branch">-</span>
+          </div>
+          <div class="git-panel-actions">
+            <button class="git-btn" id="git-btn-clone">Clone</button>
+            <button class="git-btn" id="git-btn-commit">Commit</button>
+            <button class="git-btn" id="git-btn-push">Push</button>
+            <button class="git-btn" id="git-btn-pull">Pull</button>
+            <button class="git-btn" id="git-btn-new-branch">New Branch</button>
           </div>
         </div>
         
         <!-- Branches View -->
         <div class="outline-view" id="branches-view">
-          <div class="git-graph-header">
+          <div class="section-header">
             <h3>Branches</h3>
-            <button class="git-btn" id="git-btn-new-branch-panel" style="margin-left: auto; padding: 4px 8px;">+ New</button>
           </div>
           <div class="branches-content" id="branches-content">
-            <div class="git-graph-empty">Open a folder to see branches</div>
+            <div class="section-empty">Open a folder to see branches</div>
           </div>
         </div>
         
         <!-- Graph View -->
         <div class="outline-view" id="graph-view">
-          <div class="git-graph-header">
+          <div class="section-header">
             <h3>Graph</h3>
           </div>
-          <div class="git-graph-content" id="git-graph-content">
-            <div class="git-graph-empty">Open a folder to see commit graph</div>
+          <div class="graph-content" id="git-graph-content">
+            <div class="section-empty">Open a folder to see commit graph</div>
           </div>
         </div>
       </aside>
@@ -458,6 +479,9 @@ export function initializeUI(): void {
   const terminalEnabled = localStorage.getItem('saga-terminal-enabled') !== 'false'
   updateTerminalButtonVisibility(terminalEnabled)
 
+  // Показываем приветственный экран если нет открытых файлов
+  updateWelcomeScreen()
+
   // Добавляем обработчики событий
   setupEventListeners()
   setupResizeHandles()
@@ -524,8 +548,8 @@ function setupEventListeners(): void {
   })
 
   // Git panel buttons
+  document.getElementById('git-btn-clone')?.addEventListener('click', cloneRepository)
   document.getElementById('git-btn-new-branch')?.addEventListener('click', createNewBranch)
-  document.getElementById('git-btn-new-branch-panel')?.addEventListener('click', createNewBranch)
   document.getElementById('git-btn-commit')?.addEventListener('click', showCommitModal)
   document.getElementById('git-btn-push')?.addEventListener('click', gitPush)
   document.getElementById('git-btn-pull')?.addEventListener('click', gitPull)
@@ -612,6 +636,22 @@ function setupEventListeners(): void {
       if (state.activeTabIndex >= 0) {
         closeTab(state.activeTabIndex)
       }
+    }
+
+    // Ctrl+Tab: Next terminal
+    if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey && state.terminalIds.length > 1) {
+      e.preventDefault()
+      const currentIndex = state.terminalIds.indexOf(state.activeTerminal)
+      const nextIndex = (currentIndex + 1) % state.terminalIds.length
+      switchTerminal(state.terminalIds[nextIndex])
+    }
+
+    // Ctrl+Shift+Tab: Previous terminal
+    if (e.ctrlKey && e.key === 'Tab' && e.shiftKey && state.terminalIds.length > 1) {
+      e.preventDefault()
+      const currentIndex = state.terminalIds.indexOf(state.activeTerminal)
+      const prevIndex = (currentIndex - 1 + state.terminalIds.length) % state.terminalIds.length
+      switchTerminal(state.terminalIds[prevIndex])
     }
   })
 
@@ -912,6 +952,16 @@ function renderTabs(): void {
   })
 }
 
+function updateWelcomeScreen(): void {
+  const welcome = document.getElementById('welcome-screen')
+  const editor = document.getElementById('codemirror-editor')
+  if (welcome && editor) {
+    const hasOpenTabs = state.openTabs.length > 0
+    welcome.classList.toggle('hidden', hasOpenTabs)
+    editor.style.display = hasOpenTabs ? 'block' : 'none'
+  }
+}
+
 function openInNewTab(filePath: string, content: string): void {
   // Check if already open
   const existingIndex = state.openTabs.findIndex(t => t.path === filePath)
@@ -932,6 +982,7 @@ function openInNewTab(filePath: string, content: string): void {
   renderTabs()
   loadContentInEditor(content)
   state.currentFile = filePath
+  updateWelcomeScreen()
 }
 
 function switchToTab(index: number): void {
@@ -949,6 +1000,7 @@ function switchToTab(index: number): void {
   state.currentFile = tab.path
   renderTabs()
   updateOutline()
+  updateWelcomeScreen()
 }
 
 async function closeTab(index: number): Promise<void> {
@@ -984,6 +1036,7 @@ async function closeTab(index: number): Promise<void> {
   }
 
   renderTabs()
+  updateWelcomeScreen()
 }
 
 function loadContentInEditor(content: string): void {
@@ -1555,8 +1608,16 @@ function formatMarkdown(): void {
 function setupBottomPanel(): void {
   document.querySelectorAll('.terminal-tab').forEach(tab => {
     tab.addEventListener('click', e => {
-      const target = e.currentTarget as HTMLElement
-      const terminalId = target.dataset.terminal
+      const target = e.target as HTMLElement
+      if (target.classList.contains('terminal-tab-close')) {
+        e.stopPropagation()
+        const closeBtn = target as HTMLElement
+        const id = parseInt(closeBtn.dataset.close || '0')
+        if (id) closeTerminal(id)
+        return
+      }
+      const currentTarget = e.currentTarget as HTMLElement
+      const terminalId = currentTarget.dataset.terminal
       if (terminalId) {
         switchTerminal(parseInt(terminalId))
       }
@@ -1589,14 +1650,23 @@ function switchTerminal(id: number): void {
 function addTerminal(): void {
   state.terminalCount++
   const id = state.terminalCount
+  state.terminalIds.push(id)
 
   const tabsContainer = document.querySelector('.terminal-tabs')
   const addBtn = document.getElementById('terminal-add')
   const newTab = document.createElement('button')
   newTab.className = 'terminal-tab active'
   newTab.dataset.terminal = String(id)
-  newTab.textContent = `Terminal ${id}`
-  newTab.addEventListener('click', () => switchTerminal(id))
+  newTab.innerHTML = `<span>Terminal ${id}</span><span class="terminal-tab-close" data-close="${id}">×</span>`
+  newTab.addEventListener('click', e => {
+    const target = e.target as HTMLElement
+    if (target.classList.contains('terminal-tab-close')) {
+      e.stopPropagation()
+      closeTerminal(parseInt(target.dataset.close || '0'))
+    } else {
+      switchTerminal(id)
+    }
+  })
   tabsContainer?.insertBefore(newTab, addBtn)
 
   const panelsContainer = document.querySelector('.terminal-panels')
@@ -1616,6 +1686,31 @@ function addTerminal(): void {
 
   createTerminal(id)
   state.activeTerminal = id
+}
+
+function closeTerminal(id: number): void {
+  const index = state.terminalIds.indexOf(id)
+  if (index === -1) return
+
+  window.electronAPI?.terminalKill(String(id))
+
+  const tab = document.querySelector(`.terminal-tab[data-terminal="${id}"]`)
+  const panel = document.querySelector(`.terminal-panel[data-terminal="${id}"]`)
+  tab?.remove()
+  panel?.remove()
+
+  delete state.terminals[String(id)]
+  state.terminalIds.splice(index, 1)
+
+  if (state.activeTerminal === id) {
+    if (state.terminalIds.length > 0) {
+      const newActiveId = state.terminalIds[Math.min(index, state.terminalIds.length - 1)]
+      switchTerminal(newActiveId)
+    } else {
+      state.activeTerminal = 0
+      document.querySelectorAll('.terminal-panel').forEach(p => p.classList.remove('active'))
+    }
+  }
 }
 
 async function refreshGitChanges(): Promise<void> {
@@ -2005,7 +2100,7 @@ function setupTerminalResize(): void {
 
 // Modal Dialog Functions
 let modalCallback: ((value: string | null) => void) | null = null
-let modalType: 'file' | 'folder' | 'commit' | 'branch' = 'file'
+let modalType: 'file' | 'folder' | 'commit' | 'branch' | 'text' = 'file'
 
 function setupModal(): void {
   const overlay = document.getElementById('modal-overlay')
@@ -2265,7 +2360,7 @@ function renderLanguages(languages: LanguageInfo[]): void {
 function showModal(
   title: string,
   placeholder: string,
-  type: typeof modalType
+  type: 'file' | 'folder' | 'commit' | 'branch' | 'text'
 ): Promise<string | null> {
   return new Promise(resolve => {
     const overlay = document.getElementById('modal-overlay')
@@ -2281,7 +2376,11 @@ function showModal(
       input.placeholder = placeholder
       input.value = ''
     }
-    if (confirmBtn) confirmBtn.textContent = type === 'commit' ? 'Commit' : 'Create'
+    if (confirmBtn) {
+      if (type === 'commit') confirmBtn.textContent = 'Commit'
+      else if (type === 'text') confirmBtn.textContent = 'OK'
+      else confirmBtn.textContent = 'Create'
+    }
 
     clearModalError()
     overlay?.classList.add('active')
@@ -2667,11 +2766,11 @@ async function loadBranches(): Promise<void> {
   const content = document.getElementById('branches-content')
   if (!content || !state.currentFolder) {
     if (content)
-      content.innerHTML = '<div class="git-graph-empty">Open a folder to see branches</div>'
+      content.innerHTML = '<div class="section-empty">Open a folder to see branches</div>'
     return
   }
 
-  content.innerHTML = '<div class="git-graph-empty">Loading branches...</div>'
+  content.innerHTML = '<div class="section-empty">Loading branches...</div>'
 
   try {
     const result = await window.electronAPI?.gitBranchList(state.currentFolder)
@@ -2720,21 +2819,21 @@ async function loadBranches(): Promise<void> {
         })
       })
     } else {
-      content.innerHTML = `<div class="git-graph-empty">${result?.error || 'No branches found'}</div>`
+      content.innerHTML = `<div class="section-empty">${result?.error || 'No branches found'}</div>`
     }
   } catch (error) {
-    content.innerHTML = '<div class="git-graph-empty">Failed to load branches</div>'
+    content.innerHTML = '<div class="section-empty">Failed to load branches</div>'
   }
 }
 
 async function loadGitGraph(): Promise<void> {
   const content = document.getElementById('git-graph-content')
   if (!content || !state.currentFolder) {
-    if (content) content.innerHTML = '<div class="git-graph-empty">Open a folder to see graph</div>'
+    if (content) content.innerHTML = '<div class="section-empty">Open a folder to see graph</div>'
     return
   }
 
-  content.innerHTML = '<div class="git-graph-empty">Loading graph...</div>'
+  content.innerHTML = '<div class="section-empty">Loading graph...</div>'
 
   try {
     const result = await window.electronAPI?.gitGraph(state.currentFolder, 30)
@@ -2772,10 +2871,10 @@ async function loadGitGraph(): Promise<void> {
         })
       })
     } else {
-      content.innerHTML = `<div class="git-graph-empty">${result?.error || 'No commits found'}</div>`
+      content.innerHTML = `<div class="section-empty">${result?.error || 'No commits found'}</div>`
     }
   } catch (error) {
-    content.innerHTML = '<div class="git-graph-empty">Failed to load graph</div>'
+    content.innerHTML = '<div class="section-empty">Failed to load graph</div>'
   }
 }
 
@@ -2797,6 +2896,35 @@ async function showCommitDetails(hash: string): Promise<void> {
 }
 
 // Git Workflow Functions
+
+async function cloneRepository(): Promise<void> {
+  const repoUrl = await showModal(
+    'Clone Repository',
+    'Enter repository URL (e.g., https://github.com/user/repo.git)',
+    'text'
+  )
+  if (!repoUrl) return
+
+  const targetDir = state.currentFolder || '.'
+
+  showNotify('Cloning repository...', 'info')
+
+  try {
+    const result = await window.electronAPI?.executeCommand(targetDir, `git clone ${repoUrl}`)
+
+    if (result?.success) {
+      showNotify('Repository cloned successfully!', 'success')
+      if (state.currentFolder) {
+        loadFileTree(state.currentFolder)
+      }
+    } else {
+      showNotify(result?.error || 'Failed to clone repository', 'error')
+    }
+  } catch (error) {
+    showNotify('Error cloning repository', 'error')
+  }
+}
+
 async function createNewBranch(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
