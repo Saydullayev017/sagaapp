@@ -1146,12 +1146,15 @@ function setupCodeExecution(): void {
 
 function toggleSidebar(): void {
   const sidebar = document.getElementById('sidebar')
+  const resizeHandle = document.getElementById('resize-sidebar')
   if (!sidebar) return
 
   if (sidebar.classList.contains('hidden')) {
     sidebar.classList.remove('hidden')
+    resizeHandle?.classList.remove('hidden')
   } else {
     sidebar.classList.add('hidden')
+    resizeHandle?.classList.add('hidden')
   }
 }
 

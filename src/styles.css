@@ -247,6 +247,11 @@ body {
   min-width: 200px;
   max-width: 500px;
   background: var(--bg-secondary);
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease,
+    width 0.3s ease;
+  overflow: hidden;
 }
 
 [data-theme='glass'] .sidebar {
@@ -264,7 +269,12 @@ body {
 }
 
 .sidebar.hidden {
-  display: none;
+  transform: translateX(-100%);
+  opacity: 0;
+  width: 0 !important;
+  min-width: 0;
+  max-width: 0;
+  border-right: none;
 }
 
 .sidebar-header {
@@ -633,6 +643,15 @@ body {
 .resize-handle-sidebar {
   width: var(--resize-handle-width);
   cursor: col-resize;
+  transition:
+    opacity 0.3s ease,
+    width 0.3s ease;
+}
+
+.resize-handle-sidebar.hidden {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
 }
 
 .resize-handle-outline {
@@ -1082,7 +1101,6 @@ body {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
-
 
 .terminal-output {
   flex: 1;
