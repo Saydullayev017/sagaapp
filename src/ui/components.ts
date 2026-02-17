@@ -378,24 +378,16 @@ export function initializeUI(): void {
       <div class="settings-dialog settings-with-sidebar">
         <div class="settings-sidebar">
           <div class="settings-nav">
-            <button class="settings-nav-item active" data-section="editor">
-              <span class="settings-nav-icon">📝</span>
-              <span>Editor</span>
-            </button>
-            <button class="settings-nav-item" data-section="appearance">
-              <span class="settings-nav-icon">🎨</span>
+            <button class="settings-nav-item active" data-section="appearance">
               <span>Appearance</span>
             </button>
             <button class="settings-nav-item" data-section="terminal">
-              <span class="settings-nav-icon">💻</span>
-              <span>Terminal</span>
+              <span>Dev Mode</span>
             </button>
             <button class="settings-nav-item" data-section="languages">
-              <span class="settings-nav-icon">💻</span>
-              <span>Languages</span>
+              <span>Code Execution</span>
             </button>
             <button class="settings-nav-item" data-section="about">
-              <span class="settings-nav-icon">ℹ️</span>
               <span>About</span>
             </button>
           </div>
@@ -406,25 +398,8 @@ export function initializeUI(): void {
             <button class="settings-close" id="settings-close">&times;</button>
           </div>
           <div class="settings-body">
-            <!-- Editor Section -->
-            <div class="settings-section" id="settings-section-editor">
-              <h4>Editor</h4>
-              <label class="settings-option">
-                <span>Font Size</span>
-                <select id="setting-fontsize">
-                  <option value="12">12px</option>
-                  <option value="14" selected>14px</option>
-                  <option value="16">16px</option>
-                  <option value="18">18px</option>
-                </select>
-              </label>
-              <label class="settings-option">
-                <span>Word Wrap</span>
-                <input type="checkbox" id="setting-wordwrap" checked />
-              </label>
-            </div>
             <!-- Appearance Section -->
-            <div class="settings-section hidden" id="settings-section-appearance">
+            <div class="settings-section" id="settings-section-appearance">
               <h4>Appearance</h4>
               <label class="settings-option">
                 <span>Theme</span>
@@ -437,7 +412,7 @@ export function initializeUI(): void {
             </div>
             <!-- Terminal Section -->
             <div class="settings-section hidden" id="settings-section-terminal">
-              <h4>Terminal</h4>
+              <h4>Dev Mode</h4>
               <label class="settings-option">
                 <span>Enable Terminal</span>
                 <input type="checkbox" id="setting-terminal-enabled" checked />
