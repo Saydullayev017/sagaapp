@@ -248,10 +248,12 @@ body {
   max-width: 500px;
   background: var(--bg-secondary);
   transition:
-    transform 0.3s ease,
-    opacity 0.3s ease,
-    width 0.3s ease;
+    max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease 0.1s,
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  transform: translateX(0);
+  opacity: 1;
 }
 
 [data-theme='glass'] .sidebar {
@@ -269,12 +271,12 @@ body {
 }
 
 .sidebar.hidden {
+  max-width: 0;
+  min-width: 0;
   transform: translateX(-100%);
   opacity: 0;
-  width: 0 !important;
-  min-width: 0;
-  max-width: 0;
   border-right: none;
+  pointer-events: none;
 }
 
 .sidebar-header {
@@ -644,8 +646,8 @@ body {
   width: var(--resize-handle-width);
   cursor: col-resize;
   transition:
-    opacity 0.3s ease,
-    width 0.3s ease;
+    opacity 0.25s ease,
+    width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .resize-handle-sidebar.hidden {
@@ -706,11 +708,11 @@ body {
   padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -719,6 +721,8 @@ body {
 .toolbar-btn:hover {
   background: var(--accent);
   border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .toolbar-btn.active {
@@ -728,7 +732,8 @@ body {
 }
 
 .toolbar-btn:active {
-  transform: translateY(1px);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .theme-toggle {
@@ -770,6 +775,7 @@ body {
   overflow: hidden;
   position: relative;
   min-height: 0;
+  transition: flex 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Editor pane */
@@ -902,10 +908,20 @@ body {
   overflow-y: auto;
   background: var(--bg-secondary);
   padding: 20px;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .preview-pane.hidden {
-  display: none;
+  opacity: 0;
+  transform: translateX(30px);
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 
 .preview-content {
@@ -1068,17 +1084,29 @@ body {
 .terminal-panels {
   flex: 1;
   overflow: hidden;
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .terminal-panel {
   height: 100%;
-  display: none;
+  display: flex;
   flex-direction: column;
   padding: 8px;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.25s ease,
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .terminal-panel.active {
   display: flex;
+}
+
+.terminal-panel:not(.active) {
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
 }
 
 .terminal-container {
@@ -1923,6 +1951,22 @@ body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition:
+    max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease 0.1s,
+    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+  opacity: 1;
+  overflow: hidden;
+}
+
+.outline-panel.hidden {
+  max-width: 0;
+  min-width: 0;
+  transform: translateX(100%);
+  opacity: 0;
+  border-left: none;
+  pointer-events: none;
 }
 
 .outline-header {
