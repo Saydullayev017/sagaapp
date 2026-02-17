@@ -1859,10 +1859,62 @@ function insertTextAtCursor(text: string): void {
   cmEditor.focus()
 }
 
+function isCodeLike(text: string): boolean {
+  if (!text) return false
+
+  const lines = text.split('\n')
+  if (lines.length > 1) return true
+
+  const codePatterns = [
+    /[{}\[\]();]/,
+    /^(import|export|const|let|var|function|class|def|public|private|return|if|else|for|while)\s/m,
+    /[=<>!]+/,
+    /^\s{2,}/m,
+    /\(\s*\)/,
+    /=>\s*{/,
+  ]
+
+  return codePatterns.some(pattern => pattern.test(text))
+}
+
+function detectLanguage(code: string): string {
+  const firstLine = code.trim().split('\n')[0] || ''
+
+  if (/^(import|export|const|let|var|function|class|=>|async|await)\s/.test(firstLine)) {
+    return 'javascript'
+  }
+  if (/^(def|class|import|from|if __name__|print\()/.test(firstLine)) {
+    return 'python'
+  }
+  if (/^(function|var|let|const|public|private|class|interface)\s/.test(firstLine)) {
+    return 'java'
+  }
+  if (/^(<\?php|function|class|public|private)\s/.test(firstLine)) {
+    return 'php'
+  }
+  if (/^(sub|my|use|package|print)\s/.test(firstLine)) {
+    return 'perl'
+  }
+  if (
+    /^#!.*(bash|sh|zsh)/.test(firstLine) ||
+    /^(echo|cd|ls|git|npm|node|cat|grep)\s/.test(firstLine)
+  ) {
+    return 'bash'
+  }
+  if (/^(package|import|public|class)\s/.test(firstLine)) {
+    return 'java'
+  }
+
+  return ''
+}
+
 function setupPasteHandler(): void {
   document.addEventListener('paste', async e => {
     const items = e.clipboardData?.items
     if (!items) return
+
+    let pastedText = ''
+    let isTextPaste = false
 
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
@@ -1872,6 +1924,28 @@ function setupPasteHandler(): void {
           await handleImageDrop(file)
         }
         break
+      }
+      if (item.type === 'text/plain') {
+        e.preventDefault()
+        isTextPaste = true
+        pastedText = e.clipboardData?.getData('text/plain') || ''
+        break
+      }
+    }
+
+    if (isTextPaste && pastedText && isCodeLike(pastedText)) {
+      const lang = detectLanguage(pastedText)
+      const fence = lang
+        ? '```' + lang + '\n' + pastedText + '\n```'
+        : '```\n' + pastedText + '\n```'
+
+      if (cmEditor) {
+        const pos = cmEditor.state.selection.main.head
+        cmEditor.dispatch({
+          changes: { from: pos, insert: fence + '\n' },
+          selection: { anchor: pos + 4 + lang.length + 1 },
+        })
+        cmEditor.focus()
       }
     }
   })

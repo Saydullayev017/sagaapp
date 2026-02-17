@@ -1,6 +1,6 @@
 import path from 'path'
 
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 
 import { registerIpcHandlers, registerWindowEvents } from './ipc-handlers'
 
@@ -66,10 +66,11 @@ const createWindow = (): BrowserWindow => {
   })
 
   // Handle console messages from renderer
-  win.webContents.on('console-message', (_, level, message, _line, _sourceId) => {
+  win.webContents.on('console-message', (event, params) => {
+    const paramsAny = params as unknown as { level: number; message: string }
     const levels = ['debug', 'info', 'warn', 'error']
-    const levelName = levels[level] || 'unknown'
-    console.log(`[Renderer ${levelName}]`, message)
+    const levelName = levels[paramsAny.level] || 'unknown'
+    console.log(`[Renderer ${levelName}]`, paramsAny.message)
   })
 
   // Security: prevent navigation to external URLs
@@ -116,7 +117,21 @@ const createWindow = (): BrowserWindow => {
 }
 
 // App is ready - create window
-app.on('ready', () => {
+app.whenReady().then(() => {
+  // Set Content-Security-Policy
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          process.env.NODE_ENV === 'development'
+            ? "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:*; img-src 'self' data:; font-src 'self'"
+            : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'",
+        ],
+      },
+    })
+  })
+
   createWindow()
 })
 

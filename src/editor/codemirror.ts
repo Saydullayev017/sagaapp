@@ -1,4 +1,9 @@
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
+import {
+  autocompletion,
+  completionKeymap,
+  Completion,
+  CompletionResult,
+} from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { indentOnInput, bracketMatching } from '@codemirror/language'
@@ -318,62 +323,158 @@ export function createCodeMirrorEditor(
 
         // Autocompletion - markdown snippets
         autocompletion({
+          activateOnTyping: true,
+          defaultKeymap: true,
+          closeOnBlur: false,
           override: [
             context => {
+              const line = context.state.doc.lineAt(context.pos)
+              const lineStart = line.from
+              const textBefore = context.state.doc.sliceString(lineStart, context.pos)
               const word = context.matchBefore(/[#*`\[\]!>\-~r]/)
+
+              const options: Completion[] = [
+                { label: '#', apply: '# ', detail: 'Heading 1' },
+                { label: '##', apply: '## ', detail: 'Heading 2' },
+                { label: '###', apply: '### ', detail: 'Heading 3' },
+                { label: '####', apply: '#### ', detail: 'Heading 4' },
+                { label: '#####', apply: '##### ', detail: 'Heading 5' },
+                { label: '######', apply: '###### ', detail: 'Heading 6' },
+                {
+                  label: '**bold**',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '****' },
+                      selection: { anchor: from + 2 },
+                    })
+                  },
+                  detail: 'Bold text',
+                },
+                {
+                  label: '*italic*',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '**' },
+                      selection: { anchor: from + 1 },
+                    })
+                  },
+                  detail: 'Italic text',
+                },
+                {
+                  label: '***bold italic***',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '*****' },
+                      selection: { anchor: from + 2 },
+                    })
+                  },
+                  detail: 'Bold + Italic',
+                },
+                {
+                  label: '`code`',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '``' },
+                      selection: { anchor: from + 1 },
+                    })
+                  },
+                  detail: 'Inline code',
+                },
+                {
+                  label: '```',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```\n\n```' },
+                      selection: { anchor: from + 4 },
+                    })
+                  },
+                  detail: 'Code block',
+                },
+                {
+                  label: '```python run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```python run\n\n```' },
+                      selection: { anchor: from + 15 },
+                    })
+                  },
+                  detail: 'Python (runnable)',
+                },
+                {
+                  label: '```javascript run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```javascript run\n\n```' },
+                      selection: { anchor: from + 20 },
+                    })
+                  },
+                  detail: 'JavaScript (runnable)',
+                },
+                {
+                  label: '```ruby run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```ruby run\n\n```' },
+                      selection: { anchor: from + 14 },
+                    })
+                  },
+                  detail: 'Ruby (runnable)',
+                },
+                {
+                  label: '```php run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```php run\n\n```' },
+                      selection: { anchor: from + 12 },
+                    })
+                  },
+                  detail: 'PHP (runnable)',
+                },
+                {
+                  label: '```perl run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```perl run\n\n```' },
+                      selection: { anchor: from + 14 },
+                    })
+                  },
+                  detail: 'Perl (runnable)',
+                },
+                {
+                  label: '```bash run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```bash run\n\n```' },
+                      selection: { anchor: from + 14 },
+                    })
+                  },
+                  detail: 'Bash (runnable)',
+                },
+                {
+                  label: '```java run',
+                  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
+                    view.dispatch({
+                      changes: { from, to, insert: '```java run\n\n```' },
+                      selection: { anchor: from + 14 },
+                    })
+                  },
+                  detail: 'Java (runnable)',
+                },
+              ]
+
+              if (!word && textBefore === '') {
+                return {
+                  from: context.pos,
+                  to: context.pos,
+                  options,
+                }
+              }
+
               if (!word) return null
               return {
                 from: word.from,
-                options: [
-                  { label: '#', apply: '# ', detail: 'Heading 1' },
-                  { label: '##', apply: '## ', detail: 'Heading 2' },
-                  { label: '###', apply: '### ', detail: 'Heading 3' },
-                  { label: '####', apply: '#### ', detail: 'Heading 4' },
-                  { label: '#####', apply: '##### ', detail: 'Heading 5' },
-                  { label: '######', apply: '###### ', detail: 'Heading 6' },
-                  { label: '**bold**', apply: '****', detail: 'Bold text', insert: '****' },
-                  { label: '*italic*', apply: '**', detail: 'Italic text', insert: '**' },
-                  {
-                    label: '***bold italic***',
-                    apply: '*****',
-                    detail: 'Bold + Italic',
-                    insert: '*****',
-                  },
-                  { label: '`code`', apply: '``', detail: 'Inline code' },
-                  { label: '```', insert: '```\n$0\n```', detail: 'Code block' },
-                  // Supported languages with run only
-                  {
-                    label: '```python run',
-                    insert: '```python run\n$0\n```',
-                    detail: 'Python (runnable)',
-                  },
-                  {
-                    label: '```javascript run',
-                    insert: '```javascript run\n$0\n```',
-                    detail: 'JavaScript (runnable)',
-                  },
-                  {
-                    label: '```ruby run',
-                    insert: '```ruby run\n$0\n```',
-                    detail: 'Ruby (runnable)',
-                  },
-                  { label: '```php run', insert: '```php run\n$0\n```', detail: 'PHP (runnable)' },
-                  {
-                    label: '```perl run',
-                    insert: '```perl run\n$0\n```',
-                    detail: 'Perl (runnable)',
-                  },
-                  {
-                    label: '```bash run',
-                    insert: '```bash run\n$0\n```',
-                    detail: 'Bash (runnable)',
-                  },
-                  {
-                    label: '```java run',
-                    insert: '```java run\n$0\n```',
-                    detail: 'Java (runnable)',
-                  },
-                ],
+                to: word.to,
+                options,
               }
             },
           ],
