@@ -2596,21 +2596,17 @@ function toggleTerminal(): void {
 }
 
 function toggleOutline(): void {
-  const outlinePanel = document.getElementById('outline-panel')
-  const resizeHandle = document.getElementById('resize-outline')
+  const mainLayout = document.querySelector('.main-layout')
   const btn = document.getElementById('btn-toggle-outline')
-
-  if (!outlinePanel) return
+  if (!mainLayout) return
 
   state.outlineVisible = !state.outlineVisible
 
   if (state.outlineVisible) {
-    outlinePanel.style.display = 'flex'
-    if (resizeHandle) resizeHandle.style.display = 'block'
+    mainLayout.classList.remove('outline-collapsed')
     btn?.classList.add('active')
   } else {
-    outlinePanel.style.display = 'none'
-    if (resizeHandle) resizeHandle.style.display = 'none'
+    mainLayout.classList.add('outline-collapsed')
     btn?.classList.remove('active')
   }
 

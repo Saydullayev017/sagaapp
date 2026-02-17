@@ -216,6 +216,7 @@ body {
   background: var(--bg-primary);
   overflow: hidden;
   --sidebar-width: 280px;
+  --outline-width: 280px;
 }
 
 .main-layout .sidebar {
@@ -239,11 +240,6 @@ body {
   order: 3;
   flex: 1;
   min-width: 0;
-  transition: margin-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.main-layout.sidebar-collapsed .editor-container {
-  margin-left: 0;
 }
 
 .main-layout .resize-handle-outline {
@@ -252,6 +248,16 @@ body {
 
 .main-layout .outline-panel {
   order: 5;
+  width: var(--outline-width);
+  min-width: var(--outline-width);
+  max-width: var(--outline-width);
+}
+
+.main-layout.outline-collapsed .outline-panel {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+}
 }
 
 [data-theme='glass'] .main-layout {
@@ -747,6 +753,13 @@ body {
   width: var(--resize-handle-width);
   cursor: col-resize;
   flex-shrink: 0;
+  transition: opacity 0.2s ease, width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.main-layout.outline-collapsed .resize-handle-outline {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
 }
 
 /* Editor container */
@@ -2029,26 +2042,22 @@ body {
 
 /* Outline Panel */
 .outline-panel {
-  width: 266px;
-  min-width: 266px;
-  max-width: 466px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition:
-    max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.25s ease 0.1s,
-    transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 0.2s ease 0.1s,
+              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   transform: translateX(0);
   opacity: 1;
   overflow: hidden;
 }
 
-.outline-panel.hidden {
-  max-width: 0;
-  min-width: 0;
+.main-layout.outline-collapsed .outline-panel {
   transform: translateX(100%);
   opacity: 0;
   border-left: none;
