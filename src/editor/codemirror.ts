@@ -1,3 +1,11 @@
+import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { indentOnInput, bracketMatching } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
+import { EditorState, StateField, StateEffect, RangeSetBuilder } from '@codemirror/state'
+import { oneDark } from '@codemirror/theme-one-dark'
 import {
   EditorView,
   keymap as cmKeymap,
@@ -6,86 +14,107 @@ import {
   Decoration,
   DecorationSet,
 } from '@codemirror/view'
-import { EditorState, StateField, StateEffect, RangeSetBuilder } from '@codemirror/state'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { languages } from '@codemirror/language-data'
-import { indentOnInput, bracketMatching } from '@codemirror/language'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 
 // Type for the onChange callback
 export type EditorChangeCallback = (content: string) => void
 
-// Effect to toggle markdown hidden mode
-const setMarkdownHidden = StateEffect.define<boolean>()
+// Effect to toggle auto-hide enabled
+const setAutoHideEnabled = StateEffect.define<boolean>()
 
-// State field to track hidden mode
-const markdownHiddenField = StateField.define<boolean>({
+// State field for auto-hide enabled
+const autoHideEnabledField = StateField.define<boolean>({
   create() {
-    return false
+    return true
   },
   update(value, tr) {
     for (const e of tr.effects) {
-      if (e.is(setMarkdownHidden)) value = e.value
+      if (e.is(setAutoHideEnabled)) {
+        value = e.value
+      }
     }
     return value
   },
 })
 
-// Create decoration for hidden markdown
-const hiddenDecoration = Decoration.mark({ class: 'cm-md-hidden' })
-
-// Markdown patterns to hide
-const markdownPatterns = [
-  /^(#{1,6})\s+/gm,
-  /(\*\*|__)(?=[^*])/g,
-  /(?<!\*)\*(?!\*)/g,
-  /(?<!_)_(?!_)/g,
-  /`/g,
-  /```[\s\S]*?```/g,
-  /\[/g,
-  /\]\([^)]+\)/g,
-  /^>\s+/gm,
-  /^[-*_]{3,}\s*$/gm,
-  /^[\-\*\+]\s+/gm,
-  /^\d+\.\s+/gm,
+// Markdown patterns to detect and hide (at line start)
+const lineStartPatterns = [
+  /^(#{1,6})\s+/,
+  /^(\*\*\*|___)\s+/,
+  /^(\*\*|__)\s+/,
+  /^(\*|_)\s+/,
+  /^`{3,}\S*/,
+  /^```\s*$/,
+  /^>\s+/,
+  /^[-*_]{3,}\s*$/,
+  /^[\-\*\+]\s+/,
+  /^\d+\.\s+/,
 ]
 
-// Plugin to hide markdown syntax
-const markdownHiderPlugin = ViewPlugin.fromClass(
+// Helper: get line info for markdown
+function getLineMarkdownRanges(lineText: string): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = []
+
+  // Check each pattern at line start
+  for (const pattern of lineStartPatterns) {
+    const match = pattern.exec(lineText)
+    if (match && match.index === 0 && match[0].length > 0) {
+      ranges.push({
+        from: match.index,
+        to: match.index + match[0].length,
+      })
+      break
+    }
+  }
+
+  return ranges
+}
+
+// ViewPlugin for markdown auto-hide
+const markdownAutoHidePlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet
 
     constructor(view: EditorView) {
-      this.decorations = this.hideMarkdown(view)
+      this.decorations = this.buildDecorations(view)
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = this.hideMarkdown(update.view)
+      const autoHideEnabled = update.state.field(autoHideEnabledField) ?? true
+
+      if (!autoHideEnabled) {
+        this.decorations = Decoration.none
+        return
+      }
+
+      if (update.docChanged) {
+        this.decorations = this.buildDecorations(update.view)
       }
     }
 
-    hideMarkdown(view: EditorView): DecorationSet {
+    buildDecorations(view: EditorView): DecorationSet {
       const builder = new RangeSetBuilder<Decoration>()
-      const doc = view.state.doc.toString()
-      if (!doc) return builder.finish()
+      const doc = view.state.doc
+      let count = 0
 
-      const { from, to } = view.viewport
-      const visibleText = doc.slice(from, to)
+      for (let i = 1; i <= doc.lines; i++) {
+        const line = doc.line(i)
+        const ranges = getLineMarkdownRanges(line.text)
 
-      for (const pattern of markdownPatterns) {
-        let match
-        const regex = new RegExp(pattern.source, pattern.flags)
-        while ((match = regex.exec(visibleText)) !== null) {
-          const start = from + match.index
-          const end = start + match[0].length
-          if (start < to && end > from) {
-            builder.add(start, end, hiddenDecoration)
-          }
+        for (const range of ranges) {
+          const _from = line.from + range.from
+          const _to = line.from + range.to
+          builder.add(_from, _to, Decoration.mark({ class: 'cm-md-hidden' }))
+          count++
         }
+      }
+
+      if (count > 0) {
+        console.log(
+          '[MD] Built decorations:',
+          count,
+          'line:',
+          view.state.doc.lineAt(view.state.selection.main.head).number
+        )
       }
       return builder.finish()
     }
@@ -98,30 +127,35 @@ const markdownHiderPlugin = ViewPlugin.fromClass(
 // Theme extension for hidden markdown
 const markdownHiddenTheme = EditorView.theme({
   '.cm-md-hidden': {
-    color: 'transparent !important',
-    caretColor: 'var(--text-primary)',
-  },
-  '.cm-md-hidden::selection, .cm-content .cm-md-hidden::selection': {
-    backgroundColor: 'rgba(108, 99, 255, 0.3) !important',
-    color: 'transparent !important',
+    color: 'rgba(108, 99, 255, 0.35) !important',
   },
 })
 
 /**
- * Toggle markdown hidden mode
+ * Toggle markdown auto-hide mode
  */
 export function toggleMarkdownHidden(view: EditorView): void {
-  const current = view.state.field(markdownHiddenField, false)
+  const current = view.state.field(autoHideEnabledField, false) ?? true
   view.dispatch({
-    effects: setMarkdownHidden.of(!current),
+    effects: setAutoHideEnabled.of(!current),
   })
 }
 
 /**
- * Check if markdown hidden mode is active
+ * Check if markdown auto-hide mode is active
  */
 export function isMarkdownHidden(view: EditorView): boolean {
-  return view.state.field(markdownHiddenField, false) ?? false
+  return view.state.field(autoHideEnabledField, false) ?? true
+}
+
+/**
+ * Clear all hidden markdown ranges (rebuilds decorations)
+ */
+export function clearHiddenMarkdown(view: EditorView): void {
+  // The plugin will rebuild decorations on next update
+  view.dispatch({
+    changes: { from: 0, to: 0, insert: '' },
+  })
 }
 
 // Custom theme extension for dark mode matching our app
@@ -324,8 +358,8 @@ export function createCodeMirrorEditor(
         oneDark,
         customTheme,
         markdownHiddenTheme,
-        markdownHiddenField,
-        markdownHiderPlugin,
+        autoHideEnabledField,
+        markdownAutoHidePlugin,
 
         // Update listener
         updateListener,

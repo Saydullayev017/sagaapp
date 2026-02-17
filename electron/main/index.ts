@@ -1,5 +1,7 @@
-import { app, BrowserWindow } from 'electron'
 import path from 'path'
+
+import { app, BrowserWindow } from 'electron'
+
 import { registerIpcHandlers, registerWindowEvents } from './ipc-handlers'
 
 // Import Vite types

@@ -31,10 +31,25 @@
   padding: 2px 0;
 }
 
-.cm-md-hidden {
-  color: transparent !important;
+.cm-md-hidden,
+.cm-editor .cm-md-hidden,
+.cm-content .cm-md-hidden,
+.cm-line .cm-md-hidden {
+  color: rgba(108, 99, 255, 0.35) !important;
   background: transparent !important;
-  pointer-events: none;
+  opacity: 1 !important;
+}
+
+/* Override CodeMirror syntax highlighting */
+.cm-header.cm-md-hidden,
+.cm-formatting.cm-md-hidden,
+.cm-header-1.cm-md-hidden,
+.cm-header-2.cm-md-hidden,
+.cm-header-3.cm-md-hidden,
+.cm-header-4.cm-md-hidden,
+.cm-header-5.cm-md-hidden,
+.cm-header-6.cm-md-hidden {
+  color: rgba(108, 99, 255, 0.35) !important;
 }
 
 :root {

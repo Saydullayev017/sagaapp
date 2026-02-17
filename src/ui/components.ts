@@ -1,6 +1,7 @@
 import { EditorView } from '@codemirror/view'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
+
 import {
   createCodeMirrorEditor,
   getEditorContent,
@@ -799,7 +800,7 @@ async function gitPull(): Promise<void> {
   }
 }
 
-async function switchBranch(): Promise<void> {
+async function _switchBranch(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('No folder opened', 'error')
     return
@@ -1586,7 +1587,7 @@ function setupBottomPanel(): void {
       const target = e.target as HTMLElement
       if (target.classList.contains('terminal-tab-close')) {
         e.stopPropagation()
-        const closeBtn = target as HTMLElement
+        const closeBtn = target
         const id = parseInt(closeBtn.dataset.close || '0')
         if (id) closeTerminal(id)
         return
@@ -2075,7 +2076,6 @@ function setupTerminalResize(): void {
 
 // Modal Dialog Functions
 let modalCallback: ((value: string | null) => void) | null = null
-let modalType: 'file' | 'folder' | 'commit' | 'branch' | 'text' = 'file'
 
 function setupModal(): void {
   const overlay = document.getElementById('modal-overlay')
@@ -2343,7 +2343,6 @@ function showModal(
     const input = document.getElementById('modal-input') as HTMLInputElement
     const confirmBtn = document.getElementById('modal-confirm')
 
-    modalType = type
     modalCallback = resolve
 
     if (titleEl) titleEl.textContent = title
@@ -2952,7 +2951,7 @@ async function showCommitModal(): Promise<void> {
   }
 }
 
-async function mergeToDevelop(): Promise<void> {
+async function _mergeToDevelop(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
     return
@@ -3000,7 +2999,7 @@ async function mergeToDevelop(): Promise<void> {
   }
 }
 
-async function gitFetch(): Promise<void> {
+async function _gitFetch(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
     return
@@ -3017,7 +3016,7 @@ async function gitFetch(): Promise<void> {
   }
 }
 
-async function gitStash(): Promise<void> {
+async function _gitStash(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
     return
@@ -3035,7 +3034,7 @@ async function gitStash(): Promise<void> {
   }
 }
 
-async function gitStashPop(): Promise<void> {
+async function _gitStashPop(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
     return
@@ -3053,7 +3052,7 @@ async function gitStashPop(): Promise<void> {
   }
 }
 
-async function gitDiscard(): Promise<void> {
+async function _gitDiscard(): Promise<void> {
   if (!state.currentFolder) {
     showNotify('Please open a folder first', 'error')
     return

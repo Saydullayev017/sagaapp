@@ -1,9 +1,10 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
-import fs from 'fs/promises'
-import path from 'path'
-import os from 'os'
 import { exec } from 'child_process'
+import fs from 'fs/promises'
+import os from 'os'
+import path from 'path'
 import { promisify } from 'util'
+
+import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import * as pty from 'node-pty'
 
 const execAsync = promisify(exec)
@@ -915,7 +916,7 @@ export const registerIpcHandlers = () => {
           }
       }
 
-      return new Promise(async resolve => {
+      return new Promise(resolve => {
         const isJava = lang === 'java'
 
         const proc = spawn(command, args, {

@@ -1,5 +1,5 @@
-import { marked, Renderer } from 'marked'
 import DOMPurify from 'dompurify'
+import { marked, Renderer } from 'marked'
 
 // Configure marked options for GitHub Flavored Markdown
 marked.use({
@@ -109,7 +109,7 @@ export async function parseMarkdown(content: string): Promise<string> {
   try {
     const rawHtml = await marked.parse(content)
     const cleanHtml = DOMPurify.sanitize(rawHtml, purifyConfig)
-    return cleanHtml as string
+    return cleanHtml
   } catch (error) {
     console.error('Error parsing markdown:', error)
     return `<p class="error">Error parsing markdown: ${escapeHtml(String(error))}</p>`
