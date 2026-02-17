@@ -255,8 +255,8 @@ export function initializeUI(): void {
           </div>
 
         <!-- Bottom Panel: Terminal -->
-        <div class="terminal-resize-handle" id="terminal-resize" style="display: none;"></div>
-        <div class="bottom-panel" id="bottom-panel" style="display: none;">
+        <div class="terminal-resize-handle" id="terminal-resize"></div>
+        <div class="bottom-panel" id="bottom-panel">
           <div class="terminal-header">
             <div class="terminal-tabs">
               <button class="terminal-tab active" data-terminal="1" id="terminal-tab-1">
@@ -2558,32 +2558,26 @@ function updateTerminalButtonVisibility(enabled: boolean): void {
   if (btn) {
     btn.style.display = enabled ? 'flex' : 'none'
   }
-  // If terminal is disabled, hide the bottom panel
+  // If terminal is disabled, collapse the bottom panel
   if (!enabled) {
-    const bottomPanel = document.getElementById('bottom-panel')
-    const terminalResizeHandle = document.getElementById('terminal-resize')
-    if (bottomPanel) bottomPanel.style.display = 'none'
-    if (terminalResizeHandle) terminalResizeHandle.style.display = 'none'
+    const mainLayout = document.querySelector('.main-layout')
+    if (mainLayout) {
+      mainLayout.classList.add('terminal-collapsed')
+    }
   }
 }
 
 // Terminal Toggle
 function toggleTerminal(): void {
-  const bottomPanel = document.getElementById('bottom-panel')
-  const terminalResizeHandle = document.getElementById('terminal-resize')
+  const mainLayout = document.querySelector('.main-layout')
   const btn = document.getElementById('btn-toggle-terminal')
 
-  if (!bottomPanel) return
+  if (!mainLayout) return
 
-  const isVisible = bottomPanel.style.display !== 'none'
+  const isCollapsed = mainLayout.classList.contains('terminal-collapsed')
 
-  if (isVisible) {
-    bottomPanel.style.display = 'none'
-    if (terminalResizeHandle) terminalResizeHandle.style.display = 'none'
-    btn?.classList.remove('active')
-  } else {
-    bottomPanel.style.display = 'flex'
-    if (terminalResizeHandle) terminalResizeHandle.style.display = 'block'
+  if (isCollapsed) {
+    mainLayout.classList.remove('terminal-collapsed')
     btn?.classList.add('active')
     // Fit terminal after showing
     setTimeout(() => {
@@ -2591,7 +2585,10 @@ function toggleTerminal(): void {
       if (activeTerm) {
         activeTerm.fitAddon.fit()
       }
-    }, 100)
+    }, 350)
+  } else {
+    mainLayout.classList.add('terminal-collapsed')
+    btn?.classList.remove('active')
   }
 }
 

@@ -1031,13 +1031,31 @@ body {
 
 /* Bottom Panel */
 .bottom-panel {
-  height: 250px;
+  height: var(--terminal-height, 250px);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   min-height: 100px;
   max-height: 80vh;
+  transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              opacity 0.2s ease,
+              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+}
+
+.main-layout.terminal-collapsed .bottom-panel {
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  opacity: 0;
+  transform: translateY(100%);
+  pointer-events: none;
+  border-top: none;
 }
 
 /* Terminal Resize Handle */
@@ -1045,9 +1063,16 @@ body {
   height: 1px;
   background: var(--border-color);
   cursor: ns-resize;
-  transition: background 0.2s;
+  transition: background 0.2s, opacity 0.3s, height 0.3s;
   flex-shrink: 0;
   position: relative;
+  opacity: 1;
+}
+
+.main-layout.terminal-collapsed .terminal-resize-handle {
+  opacity: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .terminal-resize-handle::after {
