@@ -2615,18 +2615,15 @@ function toggleOutline(): void {
 
 // Initialize outline visibility
 function initOutlinePanel(): void {
-  const outlinePanel = document.getElementById('outline-panel')
-  const resizeHandle = document.getElementById('resize-outline')
+  const mainLayout = document.querySelector('.main-layout')
   const btn = document.getElementById('btn-toggle-outline')
 
-  if (outlinePanel && resizeHandle) {
+  if (mainLayout) {
     if (state.outlineVisible) {
-      outlinePanel.style.display = 'flex'
-      resizeHandle.style.display = 'block'
+      mainLayout.classList.remove('outline-collapsed')
       btn?.classList.add('active')
     } else {
-      outlinePanel.style.display = 'none'
-      resizeHandle.style.display = 'none'
+      mainLayout.classList.add('outline-collapsed')
       btn?.classList.remove('active')
     }
   }
