@@ -133,7 +133,7 @@ const markdownAutoHidePlugin = ViewPlugin.fromClass(
 // Theme extension for hidden markdown
 const markdownHiddenTheme = EditorView.theme({
   '.cm-md-hidden': {
-    color: 'transparent !important',
+    color: 'rgba(108, 99, 255, 0.35) !important',
     backgroundColor: 'transparent !important',
     textShadow: 'none !important',
     fontStyle: 'normal !important',
@@ -141,11 +141,11 @@ const markdownHiddenTheme = EditorView.theme({
     textDecoration: 'none !important',
   },
   '.cm-md-hidden > span': {
-    color: 'transparent !important',
+    color: 'rgba(108, 99, 255, 0.35) !important',
   },
   '.cm-md-hidden .cm-formatting': {
-    color: 'transparent !important',
-    opacity: '0 !important',
+    color: 'rgba(108, 99, 255, 0.35) !important',
+    opacity: '0.35 !important',
   },
 })
 
