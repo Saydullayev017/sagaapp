@@ -318,39 +318,62 @@ export function createCodeMirrorEditor(
 
         // Autocompletion - markdown snippets
         autocompletion({
-          defaultKeymap: true,
           override: [
             context => {
               const word = context.matchBefore(/[#*`\[\]!>\-~r]/)
               if (!word) return null
-              const options = [
-                { label: '#', apply: '# ', detail: 'Heading 1' },
-                { label: '##', apply: '## ', detail: 'Heading 2' },
-                { label: '###', apply: '### ', detail: 'Heading 3' },
-                { label: '####', apply: '#### ', detail: 'Heading 4' },
-                { label: '#####', apply: '##### ', detail: 'Heading 5' },
-                { label: '######', apply: '###### ', detail: 'Heading 6' },
-                { label: '**bold**', apply: '****', detail: 'Bold text' },
-                { label: '*italic*', apply: '**', detail: 'Italic text' },
-                { label: '`code`', apply: '``', detail: 'Inline code' },
-                { label: '```', insert: '```\n\n```', detail: 'Code block' },
-                { label: '```python run', insert: '```python run\n\n```', detail: 'Python' },
-                {
-                  label: '```javascript run',
-                  insert: '```javascript run\n\n```',
-                  detail: 'JavaScript',
-                },
-                { label: '```ruby run', insert: '```ruby run\n\n```', detail: 'Ruby' },
-                { label: '```php run', insert: '```php run\n\n```', detail: 'PHP' },
-                { label: '```perl run', insert: '```perl run\n\n```', detail: 'Perl' },
-                { label: '```bash run', insert: '```bash run\n\n```', detail: 'Bash' },
-                { label: '```java run', insert: '```java run\n\n```', detail: 'Java' },
-              ]
               return {
                 from: word.from,
-                to: word.to,
-                options,
-                validFor: /^[#*`\[\]!>\-~r]*$/,
+                options: [
+                  { label: '#', apply: '# ', detail: 'Heading 1' },
+                  { label: '##', apply: '## ', detail: 'Heading 2' },
+                  { label: '###', apply: '### ', detail: 'Heading 3' },
+                  { label: '####', apply: '#### ', detail: 'Heading 4' },
+                  { label: '#####', apply: '##### ', detail: 'Heading 5' },
+                  { label: '######', apply: '###### ', detail: 'Heading 6' },
+                  { label: '**bold**', apply: '****', detail: 'Bold text', insert: '****' },
+                  { label: '*italic*', apply: '**', detail: 'Italic text', insert: '**' },
+                  {
+                    label: '***bold italic***',
+                    apply: '*****',
+                    detail: 'Bold + Italic',
+                    insert: '*****',
+                  },
+                  { label: '`code`', apply: '``', detail: 'Inline code' },
+                  { label: '```', insert: '```\n$0\n```', detail: 'Code block' },
+                  // Supported languages with run only
+                  {
+                    label: '```python run',
+                    insert: '```python run\n$0\n```',
+                    detail: 'Python (runnable)',
+                  },
+                  {
+                    label: '```javascript run',
+                    insert: '```javascript run\n$0\n```',
+                    detail: 'JavaScript (runnable)',
+                  },
+                  {
+                    label: '```ruby run',
+                    insert: '```ruby run\n$0\n```',
+                    detail: 'Ruby (runnable)',
+                  },
+                  { label: '```php run', insert: '```php run\n$0\n```', detail: 'PHP (runnable)' },
+                  {
+                    label: '```perl run',
+                    insert: '```perl run\n$0\n```',
+                    detail: 'Perl (runnable)',
+                  },
+                  {
+                    label: '```bash run',
+                    insert: '```bash run\n$0\n```',
+                    detail: 'Bash (runnable)',
+                  },
+                  {
+                    label: '```java run',
+                    insert: '```java run\n$0\n```',
+                    detail: 'Java (runnable)',
+                  },
+                ],
               }
             },
           ],
