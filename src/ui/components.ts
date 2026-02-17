@@ -1145,17 +1145,10 @@ function setupCodeExecution(): void {
 }
 
 function toggleSidebar(): void {
-  const sidebar = document.getElementById('sidebar')
-  const resizeHandle = document.getElementById('resize-sidebar')
-  if (!sidebar) return
+  const mainLayout = document.querySelector('.main-layout')
+  if (!mainLayout) return
 
-  if (sidebar.classList.contains('hidden')) {
-    sidebar.classList.remove('hidden')
-    resizeHandle?.classList.remove('hidden')
-  } else {
-    sidebar.classList.add('hidden')
-    resizeHandle?.classList.add('hidden')
-  }
+  mainLayout.classList.toggle('sidebar-collapsed')
 }
 
 function togglePreview(): void {

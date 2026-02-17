@@ -215,10 +215,20 @@ body {
   height: calc(100vh - 36px);
   background: var(--bg-primary);
   overflow: hidden;
+  --sidebar-width: 280px;
 }
 
 .main-layout .sidebar {
   order: 1;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+}
+
+.main-layout.sidebar-collapsed .sidebar {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
 }
 
 .main-layout .resize-handle-sidebar {
@@ -228,6 +238,12 @@ body {
 .main-layout .editor-container {
   order: 3;
   flex: 1;
+  min-width: 0;
+  transition: margin-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.main-layout.sidebar-collapsed .editor-container {
+  margin-left: 0;
 }
 
 .main-layout .resize-handle-outline {
@@ -244,18 +260,62 @@ body {
 
 /* Sidebar */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
-  max-width: 280px;
   background: var(--bg-secondary);
   transition:
-    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.2s ease,
-    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.2s ease 0.1s,
+    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   overflow: hidden;
   transform: translateX(0);
   opacity: 1;
-  will-change: transform, opacity, width;
+  will-change: width, min-width, max-width, transform, opacity;
+}
+
+[data-theme='glass'] .sidebar {
+  background: rgba(22, 33, 62, 0.85);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-right: 1px solid var(--border-color);
+}
+
+.sidebar {
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.main-layout.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  border-right: none;
+  pointer-events: none;
+}
+
+[data-theme='glass'] .sidebar {
+  background: rgba(22, 33, 62, 0.85);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-right: 1px solid var(--border-color);
+}
+
+.sidebar {
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar.hidden {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  transform: translateX(-100%);
+  opacity: 0;
+  border-right: none;
+  pointer-events: none;
 }
 
 [data-theme='glass'] .sidebar {
