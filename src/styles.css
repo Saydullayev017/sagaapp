@@ -260,7 +260,6 @@ body {
   min-width: 0;
   max-width: 0;
 }
-}
 
 [data-theme='glass'] .main-layout {
   background: linear-gradient(135deg, rgba(15, 20, 35, 0.95) 0%, rgba(25, 35, 55, 0.9) 100%);
@@ -755,7 +754,9 @@ body {
   width: var(--resize-handle-width);
   cursor: col-resize;
   flex-shrink: 0;
-  transition: opacity 0.2s ease, width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    opacity 0.2s ease,
+    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .main-layout.outline-collapsed .resize-handle-outline {
@@ -1048,11 +1049,12 @@ body {
   flex-direction: column;
   min-height: 100px;
   max-height: 80vh;
-  transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-              min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 0.2s ease,
-              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.2s ease,
+    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   opacity: 1;
   transform: translateY(0);
   overflow: hidden;
@@ -1073,7 +1075,10 @@ body {
   height: 1px;
   background: var(--border-color);
   cursor: ns-resize;
-  transition: background 0.2s, opacity 0.3s, height 0.3s;
+  transition:
+    background 0.2s,
+    opacity 0.3s,
+    height 0.3s;
   flex-shrink: 0;
   position: relative;
   opacity: 1;
@@ -1500,41 +1505,46 @@ body {
 
 /* Autocomplete styles */
 .cm-tooltip-autocomplete {
-  background: var(--bg-secondary) !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
-  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .cm-tooltip-autocomplete > ul {
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace !important;
-  font-size: 13px !important;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
 }
 
 .cm-tooltip-autocomplete > ul > li {
-  padding: 8px 12px !important;
-  color: var(--text-primary) !important;
+  padding: 8px 12px;
+  color: var(--text-primary);
 }
 
 .cm-tooltip-autocomplete > ul > li[aria-selected] {
-  background: var(--accent) !important;
-  color: white !important;
+  background: var(--accent);
+  color: white;
 }
 
 .cm-completionLabel {
-  color: var(--text-primary) !important;
+  color: var(--text-primary);
+}
+
+.cm-completionDetail {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-left: 8px;
 }
 
 .cm-completionInfo {
-  color: var(--text-secondary) !important;
-  font-size: 12px !important;
-  padding: 8px 12px !important;
-  background: var(--bg-tertiary) !important;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
 }
 
 .cm-tooltip.cm-completionInfo {
-  border-left: 1px solid var(--border-color) !important;
+  border-left: 1px solid var(--border-color);
 }
 
 /* Full editor container (no preview) */
@@ -2100,11 +2110,12 @@ body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-              min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 0.2s ease 0.1s,
-              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.2s ease 0.1s,
+    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   transform: translateX(0);
   opacity: 1;
   overflow: hidden;
