@@ -1,5 +1,12 @@
-import { EditorView, keymap as cmKeymap, ViewPlugin, ViewUpdate } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
+import {
+  EditorView,
+  keymap as cmKeymap,
+  ViewPlugin,
+  ViewUpdate,
+  Decoration,
+  DecorationSet,
+} from '@codemirror/view'
+import { EditorState, StateField, StateEffect, RangeSetBuilder } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { indentOnInput, bracketMatching } from '@codemirror/language'
@@ -10,6 +17,112 @@ import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 
 // Type for the onChange callback
 export type EditorChangeCallback = (content: string) => void
+
+// Effect to toggle markdown hidden mode
+const setMarkdownHidden = StateEffect.define<boolean>()
+
+// State field to track hidden mode
+const markdownHiddenField = StateField.define<boolean>({
+  create() {
+    return false
+  },
+  update(value, tr) {
+    for (const e of tr.effects) {
+      if (e.is(setMarkdownHidden)) value = e.value
+    }
+    return value
+  },
+})
+
+// Create decoration for hidden markdown
+const hiddenDecoration = Decoration.mark({ class: 'cm-md-hidden' })
+
+// Markdown patterns to hide
+const markdownPatterns = [
+  /^(#{1,6})\s+/gm,
+  /(\*\*|__)(?=[^*])/g,
+  /(?<!\*)\*(?!\*)/g,
+  /(?<!_)_(?!_)/g,
+  /`/g,
+  /```[\s\S]*?```/g,
+  /\[/g,
+  /\]\([^)]+\)/g,
+  /^>\s+/gm,
+  /^[-*_]{3,}\s*$/gm,
+  /^[\-\*\+]\s+/gm,
+  /^\d+\.\s+/gm,
+]
+
+// Plugin to hide markdown syntax
+const markdownHiderPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+
+    constructor(view: EditorView) {
+      this.decorations = this.hideMarkdown(view)
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = this.hideMarkdown(update.view)
+      }
+    }
+
+    hideMarkdown(view: EditorView): DecorationSet {
+      const builder = new RangeSetBuilder<Decoration>()
+      const doc = view.state.doc.toString()
+      if (!doc) return builder.finish()
+
+      const { from, to } = view.viewport
+      const visibleText = doc.slice(from, to)
+
+      for (const pattern of markdownPatterns) {
+        let match
+        const regex = new RegExp(pattern.source, pattern.flags)
+        while ((match = regex.exec(visibleText)) !== null) {
+          const start = from + match.index
+          const end = start + match[0].length
+          if (start < to && end > from) {
+            builder.add(start, end, hiddenDecoration)
+          }
+        }
+      }
+      return builder.finish()
+    }
+  },
+  {
+    decorations: v => v.decorations,
+  }
+)
+
+// Theme extension for hidden markdown
+const markdownHiddenTheme = EditorView.theme({
+  '.cm-md-hidden': {
+    color: 'transparent !important',
+    caretColor: 'var(--text-primary)',
+  },
+  '.cm-md-hidden::selection, .cm-content .cm-md-hidden::selection': {
+    backgroundColor: 'rgba(108, 99, 255, 0.3) !important',
+    color: 'transparent !important',
+  },
+})
+
+/**
+ * Toggle markdown hidden mode
+ */
+export function toggleMarkdownHidden(view: EditorView): void {
+  const current = view.state.field(markdownHiddenField, false)
+  view.dispatch({
+    effects: setMarkdownHidden.of(!current),
+  })
+}
+
+/**
+ * Check if markdown hidden mode is active
+ */
+export function isMarkdownHidden(view: EditorView): boolean {
+  return view.state.field(markdownHiddenField, false) ?? false
+}
 
 // Custom theme extension for dark mode matching our app
 const customTheme = EditorView.theme(
@@ -96,10 +209,6 @@ const customTheme = EditorView.theme(
       backgroundColor: 'rgba(121, 192, 255, 0.15)',
       borderRadius: '4px',
       padding: '2px 8px',
-    },
-    // Code block styling in editor
-    '.cm-line': {
-      padding: '0 4px',
     },
     // Scrollbar styling
     '&.cm-editor ::-webkit-scrollbar': {
@@ -214,6 +323,9 @@ export function createCodeMirrorEditor(
         // Theme
         oneDark,
         customTheme,
+        markdownHiddenTheme,
+        markdownHiddenField,
+        markdownHiderPlugin,
 
         // Update listener
         updateListener,

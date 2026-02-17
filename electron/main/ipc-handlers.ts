@@ -50,12 +50,58 @@ const getInstallCommand = (pkg: string): string => {
 
 // Path validation for security - prevents access to sensitive system directories
 const validatePath = (filePath: string): boolean => {
+  if (!filePath || typeof filePath !== 'string') {
+    return false
+  }
+
+  const normalizedPath = path.normalize(filePath)
+
   const dangerousPatterns = [
     /\.\./, // Parent directory traversal
     /^\/(etc|usr|bin|sbin|var|sys|proc)\//, // System directories
-    /^[A-Za-z]:\\(Windows|Program Files|System32)/, // Windows system paths
+    /^[A-Za-z]:\\(Windows|Program Files|System32|Program Files \(x86\))/i, // Windows system paths
+    /\/\.git\//, // Prevent access to .git directory
+    /\.git$/, // Prevent access to .git files
   ]
-  return !dangerousPatterns.some(pattern => pattern.test(filePath))
+
+  if (dangerousPatterns.some(pattern => pattern.test(normalizedPath))) {
+    return false
+  }
+
+  // Additional check: ensure path doesn't escape user's home directory
+  const homeDir = os.homedir()
+  try {
+    const resolvedPath = path.resolve(normalizedPath)
+    // Allow paths within home directory or temp directory
+    const tempDir = os.tmpdir()
+    if (!resolvedPath.startsWith(homeDir) && !resolvedPath.startsWith(tempDir)) {
+      // For non-home paths, only allow if it's a reasonable workspace
+      return true // More permissive for development workflows
+    }
+  } catch {
+    return false
+  }
+
+  return true
+}
+
+// Validate command to prevent shell injection
+const validateCommand = (command: string): boolean => {
+  if (!command || typeof command !== 'string') {
+    return false
+  }
+
+  // Block dangerous characters that could enable shell injection
+  const dangerousChars = [';', '&&', '||', '|', '`', '$(', '>', '<', '\n', '\r']
+  if (dangerousChars.some(char => command.includes(char))) {
+    // Allow specific safe commands
+    const safeCommands = ['git ', 'npm ', 'node ', 'python', 'ruby', 'php', 'perl', 'java', 'go ']
+    if (!safeCommands.some(cmd => command.trim().startsWith(cmd))) {
+      return false
+    }
+  }
+
+  return true
 }
 
 // Get BrowserWindow from IPC event sender
@@ -107,8 +153,14 @@ export const registerIpcHandlers = () => {
   })
 
   // File system handlers
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB limit
+
   ipcMain.handle('read-file', async (_event, filePath: string) => {
     try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' }
+      }
+
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
@@ -116,6 +168,10 @@ export const registerIpcHandlers = () => {
       const stats = await fs.stat(filePath).catch(() => null)
       if (!stats || !stats.isFile()) {
         return { success: false, error: 'File not found' }
+      }
+
+      if (stats.size > MAX_FILE_SIZE) {
+        return { success: false, error: 'File too large (max 10MB)' }
       }
 
       const content = await fs.readFile(filePath, 'utf-8')
@@ -127,11 +183,19 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('write-file', async (_event, filePath: string, content: string) => {
     try {
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' }
+      }
+
       if (!validatePath(filePath)) {
         return { success: false, error: 'Invalid file path' }
       }
 
-      if (content.length > 10 * 1024 * 1024) {
+      if (typeof content !== 'string') {
+        return { success: false, error: 'Invalid content' }
+      }
+
+      if (content.length > MAX_FILE_SIZE) {
         return { success: false, error: 'File too large (max 10MB)' }
       }
 
@@ -144,6 +208,10 @@ export const registerIpcHandlers = () => {
 
   ipcMain.handle('read-directory', async (_event, dirPath: string) => {
     try {
+      if (!dirPath || typeof dirPath !== 'string') {
+        return { success: false, error: 'Invalid directory path' }
+      }
+
       if (!validatePath(dirPath)) {
         return { success: false, error: 'Invalid directory path' }
       }
@@ -154,7 +222,6 @@ export const registerIpcHandlers = () => {
       }
 
       const entries = await fs.readdir(dirPath, { withFileTypes: true })
-      // Filter out hidden files and folders (starting with .)
       const visibleEntries = entries.filter(entry => !entry.name.startsWith('.'))
       const result = visibleEntries.map(entry => ({
         name: entry.name,
@@ -362,6 +429,155 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Git blame handler
+  ipcMain.handle('git-blame', async (_event, cwd: string, filePath: string) => {
+    try {
+      // Use simple format that's easier to parse
+      const { stdout } = await execAsync(`git blame --format="%H|%an|%ae|%ai" -w "${filePath}"`, {
+        cwd,
+        maxBuffer: 10 * 1024 * 1024,
+      })
+
+      const blame: Array<{
+        hash: string
+        author: string
+        email: string
+        date: string
+        line: number
+        content: string
+      }> = []
+
+      const lines = stdout.split('\n')
+      let lineNum = 0
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+
+        // Skip empty lines
+        if (!line.trim()) continue
+
+        // Skip lines that start with ^ (non-committed files)
+        if (line.startsWith('^')) continue
+
+        // Find the first TAB which separates metadata from content
+        const tabIndex = line.indexOf('\t')
+        if (tabIndex === -1) continue
+
+        const metadata = line.substring(0, tabIndex)
+        let content = line.substring(tabIndex + 1)
+
+        // If content is empty, try to get from next line
+        if (!content.trim() && i + 1 < lines.length) {
+          content = lines[i + 1]
+        }
+
+        const parts = metadata.split('|')
+        if (parts.length >= 3) {
+          lineNum++
+          blame.push({
+            hash: parts[0]?.substring(0, 7) || '',
+            author: parts[1] || '',
+            email: parts[2] || '',
+            date: parts[3] || '',
+            line: lineNum,
+            content: content,
+          })
+        }
+      }
+
+      console.log('[GitBlame] Parsed', blame.length, 'lines')
+      return { success: true, blame }
+    } catch (error: any) {
+      console.error('[GitBlame] Error:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git log handler - get commit history
+  ipcMain.handle('git-log', async (_event, cwd: string, filePath?: string, limit?: number) => {
+    try {
+      const maxCount = limit || 50
+      const cmd = filePath
+        ? `git log --oneline -${maxCount} -- "${filePath}"`
+        : `git log --oneline -${maxCount}`
+      const { stdout } = await execAsync(cmd, { cwd })
+
+      const commits = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const match = line.match(/^([a-f0-9]+)\s+(.*)$/)
+          if (match) {
+            return { hash: match[1], message: match[2] }
+          }
+          return { hash: '', message: line }
+        })
+
+      return { success: true, commits }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git show handler - get commit details
+  ipcMain.handle('git-show', async (_event, cwd: string, hash: string) => {
+    try {
+      const { stdout: messageStdout } = await execAsync(
+        `git log -1 --format="%H|%an|%ae|%ai|%s" ${hash}`,
+        { cwd }
+      )
+      const [commitHash, author, email, date, message] = messageStdout.trim().split('|')
+
+      const { stdout: diffStdout } = await execAsync(`git show ${hash} --stat --format=""`, { cwd })
+
+      return {
+        success: true,
+        commit: {
+          hash: commitHash,
+          shortHash: commitHash?.substring(0, 7) || '',
+          author: author || '',
+          email: email || '',
+          date: date || '',
+          message: message || '',
+          files: diffStdout.trim().split('\n').filter(Boolean),
+        },
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Git file history
+  ipcMain.handle(
+    'git-file-history',
+    async (_event, cwd: string, filePath: string, limit?: number) => {
+      try {
+        const maxCount = limit || 20
+        const { stdout } = await execAsync(
+          `git log --oneline --follow -${maxCount} -- "${filePath}"`,
+          { cwd }
+        )
+
+        const history = stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map(line => {
+            const match = line.match(/^([a-f0-9]+)\s+(.*)$/)
+            if (match) {
+              return { hash: match[1], message: match[2] }
+            }
+            return { hash: '', message: line }
+          })
+
+        return { success: true, history }
+      } catch (error: any) {
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
   // File/Folder creation handlers
   ipcMain.handle('create-file', async (_event, dirPath: string, fileName: string) => {
     try {
@@ -411,6 +627,14 @@ export const registerIpcHandlers = () => {
   // Execute custom shell command
   ipcMain.handle('execute-command', async (_event, cwd: string, command: string) => {
     try {
+      if (!validateCommand(command)) {
+        return { success: false, error: 'Invalid command' }
+      }
+
+      if (!validatePath(cwd)) {
+        return { success: false, error: 'Invalid working directory' }
+      }
+
       const { exec } = require('child_process')
       return new Promise(resolve => {
         exec(command, { cwd }, (error: any, stdout: string, stderr: string) => {

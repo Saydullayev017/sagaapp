@@ -8,6 +8,7 @@ import {
   getCursorPosition,
 } from '../editor/codemirror'
 import { parseMarkdown } from '../editor/markdown-parser'
+import { debounce, escapeHtml, showNotify } from '../utils/dom'
 
 // Types for file tree
 interface TreeNode {
@@ -98,10 +99,6 @@ const state: UIState = {
 // CodeMirror editor instance
 let cmEditor: EditorView | null = null
 
-// Auto-save timeout
-let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null
-const AUTO_SAVE_DELAY = 2000
-
 // Storage keys
 const STORAGE_KEY = 'japp-state'
 
@@ -152,6 +149,9 @@ export function initializeUI(): void {
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
+          </button>
+          <button class="sidebar-action-btn" id="btn-settings" title="Settings" style="margin-left: auto;">
+            ⚙
           </button>
         </div>
         <div class="file-tree-search">
@@ -206,7 +206,6 @@ export function initializeUI(): void {
           </div>
           <div class="toolbar-center"></div>
           <div class="toolbar-right">
-            <button class="toolbar-btn" id="btn-settings" title="Settings">⚙</button>
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">Edit</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">Preview</button>
@@ -231,9 +230,22 @@ export function initializeUI(): void {
         <!-- Bottom Panel: Terminal -->
         <div class="terminal-resize-handle" id="terminal-resize" style="display: none;"></div>
         <div class="bottom-panel" id="bottom-panel" style="display: none;">
-          <div class="terminal-tabs">
-            <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
-            <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+          <div class="terminal-header">
+            <div class="terminal-tabs">
+              <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+              <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
+            </div>
+            <div class="terminal-actions">
+              <button class="terminal-action-btn" id="btn-gitlens" title="GitLens">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <line x1="12" y1="3" x2="12" y2="9"></line>
+                  <line x1="12" y1="15" x2="12" y2="21"></line>
+                  <line x1="3" y1="12" x2="9" y2="12"></line>
+                  <line x1="15" y1="12" x2="21" y2="12"></line>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="terminal-panels">
             <div class="terminal-panel active" data-terminal="1">
@@ -248,21 +260,47 @@ export function initializeUI(): void {
       
       <!-- Right Panel: Outline -->
       <aside class="outline-panel" id="outline-panel">
-        <div class="outline-header">
-          <h3>Outline</h3>
+        <div class="outline-tabs">
+          <button class="outline-tab active" data-view="outline">Outline</button>
+          <button class="outline-tab" data-view="git">Git</button>
+          <button class="outline-tab" data-view="gitlens">GitLens</button>
         </div>
-        <div class="outline-content" id="outline-content">
-          <div class="outline-empty">Open a file to see outline</div>
-        </div>
-        <div class="git-panel">
-          <div class="git-panel-header">
-            <h3>Git</h3>
-            <span class="git-current-branch" id="git-current-branch">-</span>
+        
+        <!-- Outline View -->
+        <div class="outline-view active" id="outline-view">
+          <div class="outline-header">
+            <h3>Outline</h3>
           </div>
-          <div class="git-panel-actions">
-            <button class="git-btn" id="git-btn-new-branch">New Branch</button>
-            <button class="git-btn" id="git-btn-commit">Commit</button>
-            <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+          <div class="outline-content" id="outline-content">
+            <div class="outline-empty">Open a file to see outline</div>
+          </div>
+        </div>
+        
+        <!-- Git View -->
+        <div class="outline-view" id="git-view">
+          <div class="git-panel">
+            <div class="git-panel-header">
+              <h3>Git</h3>
+              <span class="git-current-branch" id="git-current-branch">-</span>
+            </div>
+            <div class="git-panel-actions">
+              <button class="git-btn" id="git-btn-new-branch">New Branch</button>
+              <button class="git-btn" id="git-btn-commit">Commit</button>
+              <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- GitLens View -->
+        <div class="outline-view" id="gitlens-view">
+          <div class="gitlens-header">
+            <h3>GitLens</h3>
+            <div class="gitlens-tabs">
+              <button class="gitlens-tab active" data-gitlens="history">History</button>
+            </div>
+          </div>
+          <div class="gitlens-content" id="gitlens-content">
+            <div class="gitlens-empty">Open a file to see history</div>
           </div>
         </div>
       </aside>
@@ -317,6 +355,10 @@ export function initializeUI(): void {
               <span class="settings-nav-icon">🎨</span>
               <span>Appearance</span>
             </button>
+            <button class="settings-nav-item" data-section="terminal">
+              <span class="settings-nav-icon">💻</span>
+              <span>Terminal</span>
+            </button>
             <button class="settings-nav-item" data-section="languages">
               <span class="settings-nav-icon">💻</span>
               <span>Languages</span>
@@ -362,6 +404,15 @@ export function initializeUI(): void {
                 </select>
               </label>
             </div>
+            <!-- Terminal Section -->
+            <div class="settings-section hidden" id="settings-section-terminal">
+              <h4>Terminal</h4>
+              <label class="settings-option">
+                <span>Enable Terminal</span>
+                <input type="checkbox" id="setting-terminal-enabled" checked />
+              </label>
+              <p class="settings-info">When enabled, the Terminal button will be visible in the toolbar and you can use the integrated terminal.</p>
+            </div>
             <!-- Languages Section -->
             <div class="settings-section hidden" id="settings-section-languages">
               <h4>Code Execution</h4>
@@ -392,6 +443,10 @@ export function initializeUI(): void {
 
   // Загружаем тему
   loadTheme()
+
+  // Обновляем видимость кнопки терминала
+  const terminalEnabled = localStorage.getItem('saga-terminal-enabled') !== 'false'
+  updateTerminalButtonVisibility(terminalEnabled)
 
   // Добавляем обработчики событий
   setupEventListeners()
@@ -432,6 +487,31 @@ function setupEventListeners(): void {
   // Terminal toggle button
   document.getElementById('btn-toggle-terminal')?.addEventListener('click', toggleTerminal)
   document.getElementById('btn-toggle-outline')?.addEventListener('click', toggleOutline)
+
+  // GitLens button in terminal
+  document.getElementById('btn-gitlens')?.addEventListener('click', () => {
+    if (state.currentFolder) {
+      const outlinePanel = document.getElementById('outline-panel')
+      if (outlinePanel) {
+        state.outlineVisible = true
+        outlinePanel.style.display = 'flex'
+        document.getElementById('resize-outline')?.removeAttribute('style')
+
+        // Switch to GitLens tab
+        document.querySelectorAll('.outline-tab').forEach(t => t.classList.remove('active'))
+        document.querySelector('.outline-tab[data-view="gitlens"]')?.classList.add('active')
+        document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
+        document.getElementById('gitlens-view')?.classList.add('active')
+
+        // Load history info
+        if (state.currentFile) {
+          loadGitHistory()
+        }
+      }
+    } else {
+      showNotify('Open a folder first to use Git', 'info')
+    }
+  })
 
   // Git panel buttons
   document.getElementById('git-btn-new-branch')?.addEventListener('click', createNewBranch)
@@ -560,7 +640,7 @@ function setupEventListeners(): void {
           await loadFileTree(filePath)
           updateGitStatus(filePath)
           saveState()
-          showNotification(`Opened folder: ${file.name}`, 'success')
+          showNotify(`Opened folder: ${file.name}`, 'success')
         } else if (
           file.name.endsWith('.md') ||
           file.name.endsWith('.markdown') ||
@@ -608,7 +688,7 @@ function setupEventListeners(): void {
         await loadFileTree(filePath)
         updateGitStatus(filePath)
         saveState()
-        showNotification(`Opened folder: ${file.name}`, 'success')
+        showNotify(`Opened folder: ${file.name}`, 'success')
       }
     })
   }
@@ -623,7 +703,7 @@ function setupEventListeners(): void {
 // Git functions
 async function gitCommit(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
@@ -632,39 +712,39 @@ async function gitCommit(): Promise<void> {
 
   const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
   if (result?.success) {
-    showNotification('Commit successful', 'success')
+    showNotify('Commit successful', 'success')
     updateGitStatus(state.currentFolder)
   } else {
-    showNotification(result?.error || 'Commit failed', 'error')
+    showNotify(result?.error || 'Commit failed', 'error')
   }
 }
 
 async function gitPush(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
   const result = await window.electronAPI?.gitPush(state.currentFolder)
   if (result?.success) {
-    showNotification('Push successful', 'success')
+    showNotify('Push successful', 'success')
   } else {
-    showNotification(result?.error || 'Push failed', 'error')
+    showNotify(result?.error || 'Push failed', 'error')
   }
 }
 
 async function gitPull(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('No folder opened', 'error')
+    showNotify('No folder opened', 'error')
     return
   }
 
   const result = await window.electronAPI?.gitPull(state.currentFolder)
   if (result?.success) {
-    showNotification('Pull successful', 'success')
+    showNotify('Pull successful', 'success')
     updateGitStatus(state.currentFolder)
   } else {
-    showNotification(result?.error || 'Pull failed', 'error')
+    showNotify(result?.error || 'Pull failed', 'error')
   }
 }
 
@@ -1002,14 +1082,6 @@ function togglePreview(): void {
   }
 }
 
-function debounce(func: Function, wait: number): (...args: any[]) => void {
-  let timeout: ReturnType<typeof setTimeout>
-  return (...args: any[]) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
-  }
-}
-
 // Generate unique folder ID from path hash
 function getFolderId(path: string): number {
   let hash = 0
@@ -1170,12 +1242,6 @@ function renderTreeNodes(nodes: TreeNode[], _depth: number): string {
   return html
 }
 
-function escapeHtml(text: string): string {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}
-
 function setupFileTreeListeners(): void {
   const fileTree = document.getElementById('file-tree')
   if (!fileTree) return
@@ -1321,10 +1387,10 @@ async function saveCurrentFile(): Promise<void> {
       state.openTabs[state.activeTabIndex].modified = false
       renderTabs()
     }
-    showNotification('File saved successfully', 'success')
+    showNotify('File saved successfully', 'success')
     updateGitStatus(state.currentFolder || '')
   } else {
-    showNotification('Error saving file', 'error')
+    showNotify('Error saving file', 'error')
   }
 }
 
@@ -1348,20 +1414,9 @@ async function saveAsNewFile(): Promise<void> {
           result.filePath.split('/').pop() || result.filePath.split('\\').pop() || result.filePath
         statusFile.textContent = fileName
       }
-      showNotification('File saved successfully', 'success')
+      showNotify('File saved successfully', 'success')
     }
   }
-}
-
-function scheduleAutoSave(): void {
-  if (autoSaveTimeout) {
-    clearTimeout(autoSaveTimeout)
-  }
-  autoSaveTimeout = setTimeout(() => {
-    if (state.currentFile && cmEditor) {
-      saveCurrentFile()
-    }
-  }, AUTO_SAVE_DELAY)
 }
 
 function saveState(): void {
@@ -1433,7 +1488,7 @@ function formatMarkdown(): void {
   content = content.replace(/([^\n])\n(#{1,6})/gim, '$1\n\n$2')
 
   setEditorContent(cmEditor, content)
-  showNotification('Markdown formatted', 'success')
+  showNotify('Markdown formatted', 'success')
 }
 
 function setupBottomPanel(): void {
@@ -1619,7 +1674,7 @@ function setupDragDrop(): void {
 
 async function handleImageDrop(file: File): Promise<void> {
   if (!state.currentFolder || !cmEditor) {
-    showNotification('Open a folder first', 'error')
+    showNotify('Open a folder first', 'error')
     return
   }
 
@@ -1645,16 +1700,16 @@ async function handleImageDrop(file: File): Promise<void> {
       if (result?.success) {
         const markdown = `![${file.name}](./assets/${fileName})\n`
         insertTextAtCursor(markdown)
-        showNotification('Image saved', 'success')
+        showNotify('Image saved', 'success')
         loadFileTree(state.currentFolder!)
       } else {
-        showNotification('Failed to save image', 'error')
+        showNotify('Failed to save image', 'error')
       }
     }
     reader.readAsDataURL(file)
   } catch (e) {
     console.error('Image drop error:', e)
-    showNotification('Failed to process image', 'error')
+    showNotify('Failed to process image', 'error')
   }
 }
 
@@ -1722,24 +1777,6 @@ async function updateGitStatus(folderPath: string): Promise<void> {
       gitCurrentBranch.textContent = '-'
     }
   }
-}
-
-function showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
-  const notification = document.createElement('div')
-  notification.className = `notification notification-${type}`
-  notification.textContent = message
-  document.body.appendChild(notification)
-
-  setTimeout(() => {
-    notification.classList.add('show')
-  }, 10)
-
-  setTimeout(() => {
-    notification.classList.remove('show')
-    setTimeout(() => {
-      notification.remove()
-    }, 300)
-  }, 3000)
 }
 
 function showAboutAlert(): void {
@@ -1962,15 +1999,20 @@ function setupSettingsModal(): void {
   const fontSizeSelect = document.getElementById('setting-fontsize') as HTMLSelectElement
   const wordWrapCheck = document.getElementById('setting-wordwrap') as HTMLInputElement
   const themeSelect = document.getElementById('setting-theme') as HTMLSelectElement
+  const terminalEnabledCheck = document.getElementById(
+    'setting-terminal-enabled'
+  ) as HTMLInputElement
 
   // Load saved settings
   const savedFontSize = localStorage.getItem('saga-font-size') || '14'
   const savedWordWrap = localStorage.getItem('saga-word-wrap') !== 'false'
   const savedTheme = localStorage.getItem('saga-theme') || 'glass'
+  const savedTerminalEnabled = localStorage.getItem('saga-terminal-enabled') !== 'false'
 
   if (fontSizeSelect) fontSizeSelect.value = savedFontSize
   if (wordWrapCheck) wordWrapCheck.checked = savedWordWrap
   if (themeSelect) themeSelect.value = savedTheme
+  if (terminalEnabledCheck) terminalEnabledCheck.checked = savedTerminalEnabled
 
   const openSettings = () => {
     settingsOverlay?.classList.add('active')
@@ -2009,17 +2051,24 @@ function setupSettingsModal(): void {
     const fontSize = (document.getElementById('setting-fontsize') as HTMLSelectElement)?.value
     const wordWrap = (document.getElementById('setting-wordwrap') as HTMLInputElement)?.checked
     const theme = (document.getElementById('setting-theme') as HTMLSelectElement)?.value
+    const terminalEnabled = (
+      document.getElementById('setting-terminal-enabled') as HTMLInputElement
+    )?.checked
 
     // Save settings
     localStorage.setItem('saga-font-size', fontSize || '14')
     localStorage.setItem('saga-word-wrap', String(wordWrap !== false))
     localStorage.setItem('saga-theme', theme || 'glass')
+    localStorage.setItem('saga-terminal-enabled', String(terminalEnabled))
 
     // Apply theme immediately
     document.documentElement.setAttribute('data-theme', theme || 'glass')
 
+    // Update terminal button visibility
+    updateTerminalButtonVisibility(terminalEnabled)
+
     closeSettings()
-    showNotification('Settings saved!', 'success')
+    showNotify('Settings saved!', 'success')
   })
 
   // About button - shows small alert
@@ -2094,10 +2143,10 @@ function renderLanguages(languages: LanguageInfo[]): void {
 
       const result = await window.electronAPI?.installLanguage(langId)
       if (result?.success) {
-        showNotification(`${langId} installed successfully!`, 'success')
+        showNotify(`${langId} installed successfully!`, 'success')
         await loadLanguages()
       } else {
-        showNotification(result?.error || 'Installation failed', 'error')
+        showNotify(result?.error || 'Installation failed', 'error')
         target.disabled = false
         target.textContent = 'Install'
       }
@@ -2118,10 +2167,10 @@ function renderLanguages(languages: LanguageInfo[]): void {
 
       const result = await window.electronAPI?.uninstallLanguage(langId)
       if (result?.success) {
-        showNotification(`${langId} uninstalled successfully!`, 'success')
+        showNotify(`${langId} uninstalled successfully!`, 'success')
         await loadLanguages()
       } else {
-        showNotification(result?.error || 'Uninstall failed', 'error')
+        showNotify(result?.error || 'Uninstall failed', 'error')
         target.disabled = false
         target.textContent = 'Uninstall'
       }
@@ -2140,12 +2189,12 @@ function renderLanguages(languages: LanguageInfo[]): void {
       const result = await window.electronAPI?.checkLanguage(langId)
       if (result?.success) {
         if (result.fixed) {
-          showNotification(`${langId} fixed! Now using: ${result.path}`, 'success')
+          showNotify(`${langId} fixed! Now using: ${result.path}`, 'success')
         } else {
-          showNotification(`${langId} is working! Path: ${result.path}`, 'success')
+          showNotify(`${langId} is working! Path: ${result.path}`, 'success')
         }
       } else {
-        showNotification(result?.error || `${langId} not found. Try installing.`, 'error')
+        showNotify(result?.error || `${langId} not found. Try installing.`, 'error')
       }
       await loadLanguages()
     })
@@ -2205,7 +2254,7 @@ function getParentFolder(filePath: string): string {
 
 async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2255,14 +2304,14 @@ async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
       // For files, get the full path and open in editor
       if (type === 'file' && result.path) {
         const createdFilePath = result.path
-        showNotification(`File created successfully in "${folderName}"`, 'success')
+        showNotify(`File created successfully in "${folderName}"`, 'success')
 
         // Select and open the file
         state.fileTree.selectedPath = createdFilePath
         await loadFileTree(state.currentFolder, true)
         await openFileInEditor(createdFilePath)
       } else {
-        showNotification(
+        showNotify(
           `${type === 'file' ? 'File' : 'Folder'} created successfully in "${folderName}"`,
           'success'
         )
@@ -2274,10 +2323,10 @@ async function showCreateModal(type: 'file' | 'folder'): Promise<void> {
         await loadFileTree(state.currentFolder, true)
       }
     } else {
-      showNotification(result?.error || `Failed to create ${type}`, 'error')
+      showNotify(result?.error || `Failed to create ${type}`, 'error')
     }
   } catch (error) {
-    showNotification(`Error creating ${type}`, 'error')
+    showNotify(`Error creating ${type}`, 'error')
   }
 }
 
@@ -2298,7 +2347,7 @@ async function openFolderDialog(): Promise<void> {
 async function deleteSelectedItem(): Promise<void> {
   const selectedPath = state.fileTree.selectedPath
   if (!selectedPath) {
-    showNotification('Please select a file or folder to delete', 'error')
+    showNotify('Please select a file or folder to delete', 'error')
     return
   }
 
@@ -2310,7 +2359,7 @@ async function deleteSelectedItem(): Promise<void> {
   try {
     const result = await window.electronAPI?.deleteItem(selectedPath)
     if (result?.success) {
-      showNotification('Item deleted successfully', 'success')
+      showNotify('Item deleted successfully', 'success')
       if (state.currentFolder) {
         await loadFileTree(state.currentFolder, true)
       }
@@ -2323,17 +2372,17 @@ async function deleteSelectedItem(): Promise<void> {
         if (statusFile) statusFile.textContent = 'No file opened'
       }
     } else {
-      showNotification(result?.error || 'Failed to delete item', 'error')
+      showNotify(result?.error || 'Failed to delete item', 'error')
     }
   } catch (error) {
-    showNotification('Error deleting item', 'error')
+    showNotify('Error deleting item', 'error')
   }
 }
 
 async function renameSelectedItem(): Promise<void> {
   const selectedPath = state.fileTree.selectedPath
   if (!selectedPath) {
-    showNotification('Please select a file or folder to rename', 'error')
+    showNotify('Please select a file or folder to rename', 'error')
     return
   }
 
@@ -2345,7 +2394,7 @@ async function renameSelectedItem(): Promise<void> {
   try {
     const result = await window.electronAPI?.renameItem(selectedPath, newName)
     if (result?.success && result.newPath) {
-      showNotification('Item renamed successfully', 'success')
+      showNotify('Item renamed successfully', 'success')
 
       // Update current file if it was renamed
       if (state.currentFile === selectedPath) {
@@ -2359,10 +2408,25 @@ async function renameSelectedItem(): Promise<void> {
         await loadFileTree(state.currentFolder, true)
       }
     } else {
-      showNotification(result?.error || 'Failed to rename item', 'error')
+      showNotify(result?.error || 'Failed to rename item', 'error')
     }
   } catch (error) {
-    showNotification('Error renaming item', 'error')
+    showNotify('Error renaming item', 'error')
+  }
+}
+
+// Update terminal button visibility based on settings
+function updateTerminalButtonVisibility(enabled: boolean): void {
+  const btn = document.getElementById('btn-toggle-terminal')
+  if (btn) {
+    btn.style.display = enabled ? 'flex' : 'none'
+  }
+  // If terminal is disabled, hide the bottom panel
+  if (!enabled) {
+    const bottomPanel = document.getElementById('bottom-panel')
+    const terminalResizeHandle = document.getElementById('terminal-resize')
+    if (bottomPanel) bottomPanel.style.display = 'none'
+    if (terminalResizeHandle) terminalResizeHandle.style.display = 'none'
   }
 }
 
@@ -2511,14 +2575,111 @@ function updateOutline(): void {
 }
 
 function setupOutline(): void {
-  // Outline is updated via the debounced callback in setupCodeMirrorEditor
-  // This function is kept for potential future extensions
+  // Outline tabs switching
+  document.querySelectorAll('.outline-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const view = (tab as HTMLElement).dataset.view
+      if (!view) return
+
+      // Update tab active state
+      document.querySelectorAll('.outline-tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+
+      // Show corresponding view
+      document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
+      document.getElementById(`${view}-view`)?.classList.add('active')
+
+      // Load GitLens history when switching to gitlens view
+      if (view === 'gitlens' && state.currentFile && state.currentFolder) {
+        loadGitHistory()
+      }
+    })
+  })
+
+  // GitLens tabs switching
+  document.querySelectorAll('.gitlens-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const view = (tab as HTMLElement).dataset.gitlens
+      if (!view) return
+
+      document.querySelectorAll('.gitlens-tab').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+
+      // Load data for the selected view
+      if (state.currentFile && state.currentFolder) {
+        if (view === 'history') {
+          loadGitHistory()
+        }
+      }
+    })
+  })
+}
+
+async function loadGitHistory(): Promise<void> {
+  const content = document.getElementById('gitlens-content')
+  if (!content || !state.currentFile || !state.currentFolder) {
+    if (content) content.innerHTML = '<div class="gitlens-empty">Open a file to see history</div>'
+    return
+  }
+
+  content.innerHTML = '<div class="gitlens-empty">Loading history...</div>'
+
+  try {
+    const result = await window.electronAPI?.gitFileHistory(
+      state.currentFolder,
+      state.currentFile,
+      30
+    )
+    if (result?.success && result.history) {
+      content.innerHTML = result.history
+        .map(
+          item => `
+        <div class="gitlens-history-item" data-hash="${item.hash}">
+          <div class="gitlens-history-hash">${item.hash}</div>
+          <div class="gitlens-history-message">${escapeHtml(item.message)}</div>
+        </div>
+      `
+        )
+        .join('')
+
+      // Add click handlers
+      content.querySelectorAll('.gitlens-history-item').forEach(item => {
+        item.addEventListener('click', async () => {
+          const hash = (item as HTMLElement).dataset.hash
+          if (hash) {
+            await showCommitDetails(hash)
+          }
+        })
+      })
+    } else {
+      content.innerHTML = `<div class="gitlens-empty">${result?.error || 'No history available'}</div>`
+    }
+  } catch (error) {
+    content.innerHTML = '<div class="gitlens-empty">Failed to load history</div>'
+  }
+}
+
+async function showCommitDetails(hash: string): Promise<void> {
+  if (!state.currentFolder) return
+
+  try {
+    const result = await window.electronAPI?.gitShow(state.currentFolder, hash)
+    if (result?.success && result.commit) {
+      const commit = result.commit
+      showNotify(
+        `${commit.shortHash} - ${commit.author}: ${commit.message.substring(0, 50)}...`,
+        'info'
+      )
+    }
+  } catch (error) {
+    showNotify('Failed to load commit details', 'error')
+  }
 }
 
 // Git Workflow Functions
 async function createNewBranch(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2528,19 +2689,19 @@ async function createNewBranch(): Promise<void> {
   try {
     const result = await window.electronAPI?.gitCreateBranch(state.currentFolder, branchName)
     if (result?.success) {
-      showNotification(`Branch "${branchName}" created and checked out`, 'success')
+      showNotify(`Branch "${branchName}" created and checked out`, 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(result?.error || 'Failed to create branch', 'error')
+      showNotify(result?.error || 'Failed to create branch', 'error')
     }
   } catch (error) {
-    showNotification('Error creating branch', 'error')
+    showNotify('Error creating branch', 'error')
   }
 }
 
 async function showCommitModal(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2551,26 +2712,26 @@ async function showCommitModal(): Promise<void> {
     // First stage all changes
     const addResult = await window.electronAPI?.gitAdd(state.currentFolder, '.')
     if (!addResult?.success) {
-      showNotification(addResult?.error || 'Failed to stage changes', 'error')
+      showNotify(addResult?.error || 'Failed to stage changes', 'error')
       return
     }
 
     // Then commit
     const result = await window.electronAPI?.gitCommit(state.currentFolder, message)
     if (result?.success) {
-      showNotification('Changes committed successfully', 'success')
+      showNotify('Changes committed successfully', 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(result?.error || 'Failed to commit', 'error')
+      showNotify(result?.error || 'Failed to commit', 'error')
     }
   } catch (error) {
-    showNotification('Error committing changes', 'error')
+    showNotify('Error committing changes', 'error')
   }
 }
 
 async function mergeToDevelop(): Promise<void> {
   if (!state.currentFolder) {
-    showNotification('Please open a folder first', 'error')
+    showNotify('Please open a folder first', 'error')
     return
   }
 
@@ -2578,14 +2739,14 @@ async function mergeToDevelop(): Promise<void> {
     // Get current branch
     const branchResult = await window.electronAPI?.gitBranch(state.currentFolder)
     if (!branchResult?.success || !branchResult.branch) {
-      showNotification('Failed to get current branch', 'error')
+      showNotify('Failed to get current branch', 'error')
       return
     }
 
     const currentBranch = branchResult.branch
 
     if (currentBranch === 'develop') {
-      showNotification('Already on develop branch', 'error')
+      showNotify('Already on develop branch', 'error')
       return
     }
 
@@ -2598,7 +2759,7 @@ async function mergeToDevelop(): Promise<void> {
       // Try to create develop if it doesn't exist
       const createResult = await window.electronAPI?.gitCreateBranch(state.currentFolder, 'develop')
       if (!createResult?.success) {
-        showNotification(checkoutResult?.error || 'Failed to checkout develop', 'error')
+        showNotify(checkoutResult?.error || 'Failed to checkout develop', 'error')
         return
       }
     }
@@ -2606,12 +2767,12 @@ async function mergeToDevelop(): Promise<void> {
     // Merge current branch
     const mergeResult = await window.electronAPI?.gitMerge(state.currentFolder, currentBranch)
     if (mergeResult?.success) {
-      showNotification(`Successfully merged "${currentBranch}" into "develop"`, 'success')
+      showNotify(`Successfully merged "${currentBranch}" into "develop"`, 'success')
       updateGitStatus(state.currentFolder)
     } else {
-      showNotification(mergeResult?.error || 'Merge failed', 'error')
+      showNotify(mergeResult?.error || 'Merge failed', 'error')
     }
   } catch (error) {
-    showNotification('Error during merge', 'error')
+    showNotify('Error during merge', 'error')
   }
 }

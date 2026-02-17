@@ -28,8 +28,8 @@ const createWindow = (): BrowserWindow => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      webSecurity: false,
-      allowRunningInsecureContent: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
     frame: true,
     show: true,
@@ -50,11 +50,24 @@ const createWindow = (): BrowserWindow => {
   win.once('ready-to-show', () => {
     win.show()
     win.focus()
+    win.moveTop()
   })
 
   // Handle load failures
   win.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
     console.error('Failed to load:', errorCode, errorDescription)
+  })
+
+  // Handle render process errors
+  win.webContents.on('render-process-gone', (_, details) => {
+    console.error('Render process gone:', details)
+  })
+
+  // Handle console messages from renderer
+  win.webContents.on('console-message', (_, level, message, _line, _sourceId) => {
+    const levels = ['debug', 'info', 'warn', 'error']
+    const levelName = levels[level] || 'unknown'
+    console.log(`[Renderer ${levelName}]`, message)
   })
 
   // Security: prevent navigation to external URLs
@@ -79,18 +92,18 @@ const createWindow = (): BrowserWindow => {
   })
 
   // Load URL based on environment
-  console.log('NODE_ENV:', process.env.NODE_ENV)
-  console.log('VITE_DEV_SERVER_URL:', process.env.VITE_DEV_SERVER_URL)
-
   if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
-    // In dev mode, use dev server URL
-    const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173'
-    console.log('Loading from dev server:', devUrl)
-    win.loadURL(devUrl)
+    // In dev mode, use dev server URL - try multiple ports
+    const devUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5174'
+    win.loadURL(devUrl).catch(() => {
+      // Try alternative ports if main port fails
+      win.loadURL('http://localhost:5173').catch(() => {
+        win.loadURL('http://localhost:5175')
+      })
+    })
   } else {
     // In production, load built file
     const filePath = path.join(__dirname, '../renderer/index.html')
-    console.log('Loading production build:', filePath)
     win.loadFile(filePath)
   }
 
