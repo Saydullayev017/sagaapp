@@ -1008,6 +1008,8 @@ body {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   background: var(--bg-secondary);
   padding: 20px;
   padding-right: 12px;
@@ -1993,37 +1995,37 @@ body {
   margin-top: 12px;
 }
 
-/* Scrollbar styles */
+/* Scrollbar styles - hidden */
 ::-webkit-scrollbar {
-  width: 3px;
-  height: 3px;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 1.5px;
+  display: none;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  display: none;
 }
 
-/* Preview pane scrollbar */
+/* Preview pane scrollbar - hidden */
 .preview-pane::-webkit-scrollbar {
-  width: 2px;
+  width: 0;
+  display: none;
 }
 
 .preview-pane::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 1px;
+  display: none;
 }
 
 .preview-pane::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.1);
+  display: none;
 }
 
 /* Selection */
