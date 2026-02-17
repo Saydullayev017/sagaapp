@@ -261,7 +261,6 @@ body {
   max-width: 0;
 }
 
-
 [data-theme='glass'] .main-layout {
   background: linear-gradient(135deg, rgba(15, 20, 35, 0.95) 0%, rgba(25, 35, 55, 0.9) 100%);
 }
@@ -755,7 +754,9 @@ body {
   width: var(--resize-handle-width);
   cursor: col-resize;
   flex-shrink: 0;
-  transition: opacity 0.2s ease, width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    opacity 0.2s ease,
+    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .main-layout.outline-collapsed .resize-handle-outline {
@@ -1048,11 +1049,12 @@ body {
   flex-direction: column;
   min-height: 100px;
   max-height: 80vh;
-  transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-              min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 0.2s ease,
-              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    max-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.2s ease,
+    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   opacity: 1;
   transform: translateY(0);
   overflow: hidden;
@@ -1073,7 +1075,10 @@ body {
   height: 1px;
   background: var(--border-color);
   cursor: ns-resize;
-  transition: background 0.2s, opacity 0.3s, height 0.3s;
+  transition:
+    background 0.2s,
+    opacity 0.3s,
+    height 0.3s;
   flex-shrink: 0;
   position: relative;
   opacity: 1;
@@ -1505,16 +1510,23 @@ body {
   border-radius: 8px !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
   overflow: hidden;
+  z-index: 10000 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: absolute !important;
 }
 
 .cm-tooltip-autocomplete > ul {
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace !important;
   font-size: 13px !important;
+  display: block !important;
 }
 
 .cm-tooltip-autocomplete > ul > li {
   padding: 8px 12px !important;
   color: var(--text-primary) !important;
+  display: block !important;
 }
 
 .cm-tooltip-autocomplete > ul > li[aria-selected] {
@@ -1524,6 +1536,12 @@ body {
 
 .cm-completionLabel {
   color: var(--text-primary) !important;
+}
+
+.cm-completionDetail {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  margin-left: 8px !important;
 }
 
 .cm-completionInfo {
@@ -2100,11 +2118,12 @@ body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-              min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              opacity 0.2s ease 0.1s,
-              transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition:
+    width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    min-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    max-width 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.2s ease 0.1s,
+    transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   transform: translateX(0);
   opacity: 1;
   overflow: hidden;
