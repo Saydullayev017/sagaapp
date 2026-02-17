@@ -122,14 +122,6 @@ const markdownAutoHidePlugin = ViewPlugin.fromClass(
         }
       }
 
-      if (count > 0) {
-        console.log(
-          '[MD] Built decorations:',
-          count,
-          'line:',
-          view.state.doc.lineAt(view.state.selection.main.head).number
-        )
-      }
       return builder.finish()
     }
   },
@@ -142,7 +134,18 @@ const markdownAutoHidePlugin = ViewPlugin.fromClass(
 const markdownHiddenTheme = EditorView.theme({
   '.cm-md-hidden': {
     color: 'transparent !important',
-    textShadow: 'none',
+    backgroundColor: 'transparent !important',
+    textShadow: 'none !important',
+    fontStyle: 'normal !important',
+    fontWeight: 'normal !important',
+    textDecoration: 'none !important',
+  },
+  '.cm-md-hidden > span': {
+    color: 'transparent !important',
+  },
+  '.cm-md-hidden .cm-formatting': {
+    color: 'transparent !important',
+    opacity: '0 !important',
   },
 })
 
