@@ -103,6 +103,23 @@ export interface ElectronAPI {
     commits?: Array<{ hash: string; message: string }>
     error?: string
   }>
+  gitGraph: (
+    cwd: string,
+    limit?: number
+  ) => Promise<{
+    success: boolean
+    graph?: Array<{
+      hash: string
+      parents: string[]
+      refs: string[]
+      message: string
+      author: string
+      email: string
+      date: string
+      column: number
+    }>
+    error?: string
+  }>
   gitShow: (
     cwd: string,
     hash: string
@@ -265,6 +282,7 @@ const electronAPI: ElectronAPI = {
   gitBlame: (cwd: string, filePath: string) => ipcRenderer.invoke('git-blame', cwd, filePath),
   gitLog: (cwd: string, filePath?: string, limit?: number) =>
     ipcRenderer.invoke('git-log', cwd, filePath, limit),
+  gitGraph: (cwd: string, limit?: number) => ipcRenderer.invoke('git-graph', cwd, limit),
   gitShow: (cwd: string, hash: string) => ipcRenderer.invoke('git-show', cwd, hash),
   gitFileHistory: (cwd: string, filePath: string, limit?: number) =>
     ipcRenderer.invoke('git-file-history', cwd, filePath, limit),

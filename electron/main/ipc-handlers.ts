@@ -520,6 +520,69 @@ export const registerIpcHandlers = () => {
     }
   })
 
+  // Git graph handler - get commit history with branches for visualization
+  ipcMain.handle('git-graph', async (_event, cwd: string, limit?: number) => {
+    try {
+      const maxCount = limit || 30
+      // Get detailed log with all branches
+      const { stdout } = await execAsync(
+        `git log --all --oneline --graph --decorate -${maxCount} --format="%h|%p|%d|%s|%an|%ae|%ai"`,
+        { cwd, maxBuffer: 10 * 1024 * 1024 }
+      )
+
+      const graphData: Array<{
+        hash: string
+        parents: string[]
+        refs: string[]
+        message: string
+        author: string
+        email: string
+        date: string
+        column: number
+      }> = []
+
+      const lines = stdout.split('\n').filter(Boolean)
+
+      for (const line of lines) {
+        // Skip the graph visualization characters, get the actual commit info
+        // Format: * | abc1234 | parent1 parent2 | (refs) | message | author | date
+        const parts = line.replace(/^[\s*|/\\]+/, '').split('|')
+        if (parts.length >= 5) {
+          const hash = parts[0]?.trim() || ''
+          const parents = parts[1]?.trim().split(' ').filter(Boolean) || []
+          const refs =
+            parts[2]
+              ?.trim()
+              .replace(/[()]/g, '')
+              .split(',')
+              .map(r => r.trim())
+              .filter(Boolean) || []
+          const message = parts[3]?.trim() || ''
+          const author = parts[4]?.trim() || ''
+          const date = parts[5]?.trim() || ''
+
+          if (hash) {
+            graphData.push({
+              hash,
+              parents,
+              refs,
+              message,
+              author,
+              email: '',
+              date,
+              column: 0,
+            })
+          }
+        }
+      }
+
+      return { success: true, graph: graphData }
+    } catch (error: any) {
+      console.error('[GitGraph] Error:', error.message)
+      return { success: false, error: error.message }
+    }
+  })
+
   // Git show handler - get commit details
   ipcMain.handle('git-show', async (_event, cwd: string, hash: string) => {
     try {
