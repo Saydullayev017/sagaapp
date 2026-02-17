@@ -656,7 +656,9 @@ body {
 
 /* Editor toolbar */
 .editor-toolbar {
-  padding: 10px 16px;
+  padding: 12px 16px;
+  height: 44px;
+  box-sizing: border-box;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
