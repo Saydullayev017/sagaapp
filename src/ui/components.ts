@@ -236,7 +236,7 @@ export function initializeUI(): void {
               <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
             </div>
             <div class="terminal-actions">
-              <button class="terminal-action-btn" id="btn-gitlens" title="GitLens">
+              <button class="terminal-action-btn" id="btn-gitlens" title="Graph">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                   <circle cx="12" cy="12" r="3"></circle>
                   <line x1="12" y1="3" x2="12" y2="9"></line>
@@ -263,7 +263,8 @@ export function initializeUI(): void {
         <div class="outline-tabs">
           <button class="outline-tab active" data-view="outline">Outline</button>
           <button class="outline-tab" data-view="git">Git</button>
-          <button class="outline-tab" data-view="gitlens">GitLens</button>
+          <button class="outline-tab" data-view="branches">Branches</button>
+          <button class="outline-tab" data-view="graph">Graph</button>
         </div>
         
         <!-- Outline View -->
@@ -284,23 +285,32 @@ export function initializeUI(): void {
               <span class="git-current-branch" id="git-current-branch">-</span>
             </div>
             <div class="git-panel-actions">
-              <button class="git-btn" id="git-btn-new-branch">New Branch</button>
               <button class="git-btn" id="git-btn-commit">Commit</button>
-              <button class="git-btn" id="git-btn-merge">Merge to Develop</button>
+              <button class="git-btn" id="git-btn-push">Push</button>
+              <button class="git-btn" id="git-btn-pull">Pull</button>
+              <button class="git-btn" id="git-btn-new-branch">New Branch</button>
             </div>
           </div>
         </div>
         
-        <!-- GitLens View -->
-        <div class="outline-view" id="gitlens-view">
-          <div class="gitlens-header">
-            <h3>GitLens</h3>
-            <div class="gitlens-tabs">
-              <button class="gitlens-tab active" data-gitlens="history">History</button>
-            </div>
+        <!-- Branches View -->
+        <div class="outline-view" id="branches-view">
+          <div class="git-graph-header">
+            <h3>Branches</h3>
+            <button class="git-btn" id="git-btn-new-branch-panel" style="margin-left: auto; padding: 4px 8px;">+ New</button>
           </div>
-          <div class="gitlens-content" id="gitlens-content">
-            <div class="gitlens-empty">Open a file to see history</div>
+          <div class="branches-content" id="branches-content">
+            <div class="git-graph-empty">Open a folder to see branches</div>
+          </div>
+        </div>
+        
+        <!-- Graph View -->
+        <div class="outline-view" id="graph-view">
+          <div class="git-graph-header">
+            <h3>Graph</h3>
+          </div>
+          <div class="git-graph-content" id="git-graph-content">
+            <div class="git-graph-empty">Open a folder to see commit graph</div>
           </div>
         </div>
       </aside>
@@ -497,15 +507,15 @@ function setupEventListeners(): void {
         outlinePanel.style.display = 'flex'
         document.getElementById('resize-outline')?.removeAttribute('style')
 
-        // Switch to GitLens tab
+        // Switch to Graph tab
         document.querySelectorAll('.outline-tab').forEach(t => t.classList.remove('active'))
-        document.querySelector('.outline-tab[data-view="gitlens"]')?.classList.add('active')
+        document.querySelector('.outline-tab[data-view="graph"]')?.classList.add('active')
         document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
-        document.getElementById('gitlens-view')?.classList.add('active')
+        document.getElementById('graph-view')?.classList.add('active')
 
-        // Load history info
-        if (state.currentFile) {
-          loadGitHistory()
+        // Load graph info
+        if (state.currentFolder) {
+          loadGitGraph()
         }
       }
     } else {
@@ -515,8 +525,10 @@ function setupEventListeners(): void {
 
   // Git panel buttons
   document.getElementById('git-btn-new-branch')?.addEventListener('click', createNewBranch)
+  document.getElementById('git-btn-new-branch-panel')?.addEventListener('click', createNewBranch)
   document.getElementById('git-btn-commit')?.addEventListener('click', showCommitModal)
-  document.getElementById('git-btn-merge')?.addEventListener('click', mergeToDevelop)
+  document.getElementById('git-btn-push')?.addEventListener('click', gitPush)
+  document.getElementById('git-btn-pull')?.addEventListener('click', gitPull)
 
   // Форматирование
   document.getElementById('format-btn')?.addEventListener('click', () => {
@@ -725,11 +737,26 @@ async function gitPush(): Promise<void> {
     return
   }
 
-  const result = await window.electronAPI?.gitPush(state.currentFolder)
-  if (result?.success) {
-    showNotify('Push successful', 'success')
-  } else {
-    showNotify(result?.error || 'Push failed', 'error')
+  try {
+    let result = await window.electronAPI?.gitPush(state.currentFolder)
+
+    if (!result?.success && result?.error?.includes('no upstream branch')) {
+      const branchResult = await window.electronAPI?.gitBranch(state.currentFolder)
+      if (branchResult?.success && branchResult.branch) {
+        result = await window.electronAPI?.executeCommand(
+          state.currentFolder,
+          `git push -u origin ${branchResult.branch}`
+        )
+      }
+    }
+
+    if (result?.success) {
+      showNotify('Push successful!', 'success')
+    } else {
+      showNotify(result?.error || 'Push failed', 'error')
+    }
+  } catch (error) {
+    showNotify('Push failed', 'error')
   }
 }
 
@@ -741,10 +768,44 @@ async function gitPull(): Promise<void> {
 
   const result = await window.electronAPI?.gitPull(state.currentFolder)
   if (result?.success) {
-    showNotify('Pull successful', 'success')
+    showNotify('Pull successful!', 'success')
     updateGitStatus(state.currentFolder)
+
+    // Refresh current file if one is open
+    if (state.currentFile && cmEditor) {
+      const fileResult = await window.electronAPI?.readFile(state.currentFile)
+      if (fileResult?.success && fileResult.content !== undefined) {
+        setEditorContent(cmEditor, fileResult.content)
+        showNotify('File updated: ' + state.currentFile.split('/').pop(), 'info')
+      }
+    }
   } else {
     showNotify(result?.error || 'Pull failed', 'error')
+  }
+}
+
+async function switchBranch(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotify('No folder opened', 'error')
+    return
+  }
+  try {
+    const result = await window.electronAPI?.gitBranchList(state.currentFolder)
+    if (!result?.success || !result.branches || result.branches.length === 0) {
+      showNotify('No branches found', 'error')
+      return
+    }
+    const branchName = await showModal('Switch Branch', 'Enter branch name', 'branch')
+    if (!branchName) return
+    const checkoutResult = await window.electronAPI?.gitCheckout(state.currentFolder, branchName)
+    if (checkoutResult?.success) {
+      showNotify(`Switched to branch "${branchName}"`, 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotify(checkoutResult?.error || 'Failed to switch branch', 'error')
+    }
+  } catch (error) {
+    showNotify('Error switching branch', 'error')
   }
 }
 
@@ -2589,73 +2650,132 @@ function setupOutline(): void {
       document.querySelectorAll('.outline-view').forEach(v => v.classList.remove('active'))
       document.getElementById(`${view}-view`)?.classList.add('active')
 
-      // Load GitLens history when switching to gitlens view
-      if (view === 'gitlens' && state.currentFile && state.currentFolder) {
-        loadGitHistory()
+      // Load Graph when switching to graph view
+      if (view === 'graph' && state.currentFolder) {
+        loadGitGraph()
       }
-    })
-  })
 
-  // GitLens tabs switching
-  document.querySelectorAll('.gitlens-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const view = (tab as HTMLElement).dataset.gitlens
-      if (!view) return
-
-      document.querySelectorAll('.gitlens-tab').forEach(t => t.classList.remove('active'))
-      tab.classList.add('active')
-
-      // Load data for the selected view
-      if (state.currentFile && state.currentFolder) {
-        if (view === 'history') {
-          loadGitHistory()
-        }
+      // Load Branches when switching to branches view
+      if (view === 'branches' && state.currentFolder) {
+        loadBranches()
       }
     })
   })
 }
 
-async function loadGitHistory(): Promise<void> {
-  const content = document.getElementById('gitlens-content')
-  if (!content || !state.currentFile || !state.currentFolder) {
-    if (content) content.innerHTML = '<div class="gitlens-empty">Open a file to see history</div>'
+async function loadBranches(): Promise<void> {
+  const content = document.getElementById('branches-content')
+  if (!content || !state.currentFolder) {
+    if (content)
+      content.innerHTML = '<div class="git-graph-empty">Open a folder to see branches</div>'
     return
   }
 
-  content.innerHTML = '<div class="gitlens-empty">Loading history...</div>'
+  content.innerHTML = '<div class="git-graph-empty">Loading branches...</div>'
 
   try {
-    const result = await window.electronAPI?.gitFileHistory(
-      state.currentFolder,
-      state.currentFile,
-      30
-    )
-    if (result?.success && result.history) {
-      content.innerHTML = result.history
+    const result = await window.electronAPI?.gitBranchList(state.currentFolder)
+    const branchResult = await window.electronAPI?.gitBranch(state.currentFolder)
+    const currentBranch = branchResult?.branch || ''
+
+    if (result?.success && result.branches) {
+      // Filter only local branches (remove remotes/origin/...)
+      const localBranches = result.branches.filter(b => !b.startsWith('remotes/'))
+
+      content.innerHTML = localBranches
         .map(
-          item => `
-        <div class="gitlens-history-item" data-hash="${item.hash}">
-          <div class="gitlens-history-hash">${item.hash}</div>
-          <div class="gitlens-history-message">${escapeHtml(item.message)}</div>
+          branch => `
+        <div class="branch-item ${branch === currentBranch ? 'active' : ''}" data-branch="${branch}">
+          <span class="branch-icon">${branch === currentBranch ? '✓' : '○'}</span>
+          <span class="branch-name">${branch}</span>
         </div>
       `
         )
         .join('')
 
-      // Add click handlers
-      content.querySelectorAll('.gitlens-history-item').forEach(item => {
+      content.querySelectorAll('.branch-item').forEach(item => {
         item.addEventListener('click', async () => {
-          const hash = (item as HTMLElement).dataset.hash
+          const branchName = (item as HTMLElement).dataset.branch
+          if (branchName && branchName !== currentBranch) {
+            const checkoutResult = await window.electronAPI?.gitCheckout(
+              state.currentFolder!,
+              branchName
+            )
+            if (checkoutResult?.success) {
+              showNotify(`Switched to branch "${branchName}"`, 'success')
+              updateGitStatus(state.currentFolder!)
+              loadBranches()
+
+              // Reload current file if open
+              if (state.currentFile) {
+                const fileResult = await window.electronAPI?.readFile(state.currentFile)
+                if (fileResult?.success && fileResult.content !== undefined && cmEditor) {
+                  setEditorContent(cmEditor, fileResult.content)
+                }
+              }
+            } else {
+              showNotify(checkoutResult?.error || 'Failed to switch branch', 'error')
+            }
+          }
+        })
+      })
+    } else {
+      content.innerHTML = `<div class="git-graph-empty">${result?.error || 'No branches found'}</div>`
+    }
+  } catch (error) {
+    content.innerHTML = '<div class="git-graph-empty">Failed to load branches</div>'
+  }
+}
+
+async function loadGitGraph(): Promise<void> {
+  const content = document.getElementById('git-graph-content')
+  if (!content || !state.currentFolder) {
+    if (content) content.innerHTML = '<div class="git-graph-empty">Open a folder to see graph</div>'
+    return
+  }
+
+  content.innerHTML = '<div class="git-graph-empty">Loading graph...</div>'
+
+  try {
+    const result = await window.electronAPI?.gitGraph(state.currentFolder, 30)
+    if (result?.success && result.graph && result.graph.length > 0) {
+      content.innerHTML = `
+        <div class="git-graph">
+          ${result.graph
+            .map(
+              commit => `
+            <div class="git-graph-commit" style="margin-left: ${commit.column * 20}px">
+              <div class="git-graph-line"></div>
+              <div class="git-graph-node ${commit.refs.length > 0 ? 'has-refs' : ''}"></div>
+              <div class="git-graph-info">
+                <div class="git-graph-row">
+                  <span class="git-graph-hash">${commit.hash}</span>
+                  ${commit.refs.map(ref => `<span class="git-graph-ref">${ref}</span>`).join('')}
+                </div>
+                <div class="git-graph-message">${escapeHtml(commit.message)}</div>
+                <div class="git-graph-meta">${commit.author} - ${new Date(commit.date).toLocaleDateString()}</div>
+              </div>
+            </div>
+          `
+            )
+            .join('')}
+        </div>
+      `
+
+      // Add click handlers
+      content.querySelectorAll('.git-graph-commit').forEach(item => {
+        item.addEventListener('click', async () => {
+          const hash = item.querySelector('.git-graph-hash')?.textContent
           if (hash) {
             await showCommitDetails(hash)
           }
         })
       })
     } else {
-      content.innerHTML = `<div class="gitlens-empty">${result?.error || 'No history available'}</div>`
+      content.innerHTML = `<div class="git-graph-empty">${result?.error || 'No commits found'}</div>`
     }
   } catch (error) {
-    content.innerHTML = '<div class="gitlens-empty">Failed to load history</div>'
+    content.innerHTML = '<div class="git-graph-empty">Failed to load graph</div>'
   }
 }
 
@@ -2774,5 +2894,89 @@ async function mergeToDevelop(): Promise<void> {
     }
   } catch (error) {
     showNotify('Error during merge', 'error')
+  }
+}
+
+async function gitFetch(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotify('Please open a folder first', 'error')
+    return
+  }
+  try {
+    const result = await window.electronAPI?.executeCommand(state.currentFolder, 'git fetch --all')
+    if (result?.success) {
+      showNotify('Fetch completed successfully', 'success')
+    } else {
+      showNotify(result?.error || 'Fetch failed', 'error')
+    }
+  } catch (error) {
+    showNotify('Error during fetch', 'error')
+  }
+}
+
+async function gitStash(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotify('Please open a folder first', 'error')
+    return
+  }
+  try {
+    const result = await window.electronAPI?.executeCommand(state.currentFolder, 'git stash')
+    if (result?.success) {
+      showNotify('Changes stashed', 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotify(result?.error || 'Stash failed', 'error')
+    }
+  } catch (error) {
+    showNotify('Error during stash', 'error')
+  }
+}
+
+async function gitStashPop(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotify('Please open a folder first', 'error')
+    return
+  }
+  try {
+    const result = await window.electronAPI?.executeCommand(state.currentFolder, 'git stash pop')
+    if (result?.success) {
+      showNotify('Stash applied', 'success')
+      updateGitStatus(state.currentFolder)
+    } else {
+      showNotify(result?.error || 'Stash pop failed', 'error')
+    }
+  } catch (error) {
+    showNotify('Error during stash pop', 'error')
+  }
+}
+
+async function gitDiscard(): Promise<void> {
+  if (!state.currentFolder) {
+    showNotify('Please open a folder first', 'error')
+    return
+  }
+  if (!state.currentFile) {
+    showNotify('No file selected', 'error')
+    return
+  }
+  const confirmed = confirm('Discard changes to current file?')
+  if (!confirmed) return
+  try {
+    const result = await window.electronAPI?.executeCommand(
+      state.currentFolder,
+      `git checkout -- "${state.currentFile}"`
+    )
+    if (result?.success) {
+      showNotify('Changes discarded', 'success')
+      // Reload current file
+      const fileResult = await window.electronAPI?.readFile(state.currentFile)
+      if (fileResult?.success && fileResult.content !== undefined && cmEditor) {
+        setEditorContent(cmEditor, fileResult.content)
+      }
+    } else {
+      showNotify(result?.error || 'Discard failed', 'error')
+    }
+  } catch (error) {
+    showNotify('Error discarding changes', 'error')
   }
 }
