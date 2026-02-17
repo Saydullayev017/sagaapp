@@ -260,7 +260,7 @@ body {
   min-width: 0;
   max-width: 0;
 }
-}
+
 
 [data-theme='glass'] .main-layout {
   background: linear-gradient(135deg, rgba(15, 20, 35, 0.95) 0%, rgba(25, 35, 55, 0.9) 100%);

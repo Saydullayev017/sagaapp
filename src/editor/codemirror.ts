@@ -340,109 +340,37 @@ export function createCodeMirrorEditor(
                     insert: '*****',
                   },
                   { label: '`code`', apply: '``', detail: 'Inline code' },
-                  {
-                    label: '```',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```\n\n```'
-                      const cursorPos = from + 4 // Position after "```\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
-                    detail: 'Code block',
-                  },
+                  { label: '```', insert: '```\n$0\n```', detail: 'Code block' },
                   // Supported languages with run only
                   {
                     label: '```python run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```python run\n\n```'
-                      const cursorPos = from + 16 // Position after "```python run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```python run\n$0\n```',
                     detail: 'Python (runnable)',
                   },
                   {
                     label: '```javascript run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```javascript run\n\n```'
-                      const cursorPos = from + 22 // Position after "```javascript run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```javascript run\n$0\n```',
                     detail: 'JavaScript (runnable)',
                   },
                   {
                     label: '```ruby run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```ruby run\n\n```'
-                      const cursorPos = from + 16 // Position after "```ruby run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```ruby run\n$0\n```',
                     detail: 'Ruby (runnable)',
                   },
-                  {
-                    label: '```php run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```php run\n\n```'
-                      const cursorPos = from + 15 // Position after "```php run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
-                    detail: 'PHP (runnable)',
-                  },
+                  { label: '```php run', insert: '```php run\n$0\n```', detail: 'PHP (runnable)' },
                   {
                     label: '```perl run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```perl run\n\n```'
-                      const cursorPos = from + 16 // Position after "```perl run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```perl run\n$0\n```',
                     detail: 'Perl (runnable)',
                   },
                   {
                     label: '```bash run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```bash run\n\n```'
-                      const cursorPos = from + 16 // Position after "```bash run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```bash run\n$0\n```',
                     detail: 'Bash (runnable)',
                   },
                   {
                     label: '```java run',
-                    apply: (view, completion, from, to) => {
-                      const insertion = '```java run\n\n```'
-                      const cursorPos = from + 16 // Position after "```java run\n"
-                      view.dispatch({
-                        changes: { from, to, insert: insertion },
-                        selection: { anchor: cursorPos },
-                      })
-                      return true
-                    },
+                    insert: '```java run\n$0\n```',
                     detail: 'Java (runnable)',
                   },
                 ],
