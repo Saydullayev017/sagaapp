@@ -55,6 +55,7 @@ interface UIState {
   fileTree: FileTreeState
   activeTerminal: number
   terminalCount: number
+  terminalIds: number[]
   terminals: { [key: string]: { terminal: Terminal; fitAddon: FitAddon } }
   terminalHeight: number
   gitChanges: {
@@ -88,6 +89,7 @@ const state: UIState = {
 
   activeTerminal: 1,
   terminalCount: 1,
+  terminalIds: [1],
   terminals: {},
   terminalHeight: 0,
   gitChanges: {
@@ -250,7 +252,10 @@ export function initializeUI(): void {
         <div class="bottom-panel" id="bottom-panel" style="display: none;">
           <div class="terminal-header">
             <div class="terminal-tabs">
-              <button class="terminal-tab active" data-terminal="1">Terminal 1</button>
+              <button class="terminal-tab active" data-terminal="1" id="terminal-tab-1">
+                <span>Terminal 1</span>
+                <span class="terminal-tab-close" data-close="1">×</span>
+              </button>
               <button class="terminal-tab-add" id="terminal-add" title="New Terminal">+</button>
             </div>
             <div class="terminal-actions">
@@ -631,6 +636,22 @@ function setupEventListeners(): void {
       if (state.activeTabIndex >= 0) {
         closeTab(state.activeTabIndex)
       }
+    }
+
+    // Ctrl+Tab: Next terminal
+    if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey && state.terminalIds.length > 1) {
+      e.preventDefault()
+      const currentIndex = state.terminalIds.indexOf(state.activeTerminal)
+      const nextIndex = (currentIndex + 1) % state.terminalIds.length
+      switchTerminal(state.terminalIds[nextIndex])
+    }
+
+    // Ctrl+Shift+Tab: Previous terminal
+    if (e.ctrlKey && e.key === 'Tab' && e.shiftKey && state.terminalIds.length > 1) {
+      e.preventDefault()
+      const currentIndex = state.terminalIds.indexOf(state.activeTerminal)
+      const prevIndex = (currentIndex - 1 + state.terminalIds.length) % state.terminalIds.length
+      switchTerminal(state.terminalIds[prevIndex])
     }
   })
 
@@ -1587,8 +1608,16 @@ function formatMarkdown(): void {
 function setupBottomPanel(): void {
   document.querySelectorAll('.terminal-tab').forEach(tab => {
     tab.addEventListener('click', e => {
-      const target = e.currentTarget as HTMLElement
-      const terminalId = target.dataset.terminal
+      const target = e.target as HTMLElement
+      if (target.classList.contains('terminal-tab-close')) {
+        e.stopPropagation()
+        const closeBtn = target as HTMLElement
+        const id = parseInt(closeBtn.dataset.close || '0')
+        if (id) closeTerminal(id)
+        return
+      }
+      const currentTarget = e.currentTarget as HTMLElement
+      const terminalId = currentTarget.dataset.terminal
       if (terminalId) {
         switchTerminal(parseInt(terminalId))
       }
@@ -1621,14 +1650,23 @@ function switchTerminal(id: number): void {
 function addTerminal(): void {
   state.terminalCount++
   const id = state.terminalCount
+  state.terminalIds.push(id)
 
   const tabsContainer = document.querySelector('.terminal-tabs')
   const addBtn = document.getElementById('terminal-add')
   const newTab = document.createElement('button')
   newTab.className = 'terminal-tab active'
   newTab.dataset.terminal = String(id)
-  newTab.textContent = `Terminal ${id}`
-  newTab.addEventListener('click', () => switchTerminal(id))
+  newTab.innerHTML = `<span>Terminal ${id}</span><span class="terminal-tab-close" data-close="${id}">×</span>`
+  newTab.addEventListener('click', e => {
+    const target = e.target as HTMLElement
+    if (target.classList.contains('terminal-tab-close')) {
+      e.stopPropagation()
+      closeTerminal(parseInt(target.dataset.close || '0'))
+    } else {
+      switchTerminal(id)
+    }
+  })
   tabsContainer?.insertBefore(newTab, addBtn)
 
   const panelsContainer = document.querySelector('.terminal-panels')
@@ -1648,6 +1686,31 @@ function addTerminal(): void {
 
   createTerminal(id)
   state.activeTerminal = id
+}
+
+function closeTerminal(id: number): void {
+  const index = state.terminalIds.indexOf(id)
+  if (index === -1) return
+
+  window.electronAPI?.terminalKill(String(id))
+
+  const tab = document.querySelector(`.terminal-tab[data-terminal="${id}"]`)
+  const panel = document.querySelector(`.terminal-panel[data-terminal="${id}"]`)
+  tab?.remove()
+  panel?.remove()
+
+  delete state.terminals[String(id)]
+  state.terminalIds.splice(index, 1)
+
+  if (state.activeTerminal === id) {
+    if (state.terminalIds.length > 0) {
+      const newActiveId = state.terminalIds[Math.min(index, state.terminalIds.length - 1)]
+      switchTerminal(newActiveId)
+    } else {
+      state.activeTerminal = 0
+      document.querySelectorAll('.terminal-panel').forEach(p => p.classList.remove('active'))
+    }
+  }
 }
 
 async function refreshGitChanges(): Promise<void> {
