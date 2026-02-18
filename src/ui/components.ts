@@ -220,6 +220,7 @@ export function initializeUI(): void {
           <div class="toolbar-right">
             <div class="view-mode-toggle">
               <button class="toolbar-btn view-mode-btn active" data-mode="edit" title="Edit Mode">E</button>
+              <button class="toolbar-btn view-mode-btn" data-mode="split" title="Split View">S</button>
               <button class="toolbar-btn view-mode-btn" data-mode="preview" title="Preview Mode">P</button>
             </div>
           </div>
@@ -417,7 +418,15 @@ export function initializeUI(): void {
                 <span>Theme</span>
                 <select id="setting-theme">
                   <option value="glass" selected>Dark Glass</option>
-                  <option value="dark">Dark</option>
+                  <option value="obsidian">Obsidian</option>
+                  <option value="dracula">Dracula</option>
+                  <option value="nord">Nord</option>
+                  <option value="monokai">Monokai</option>
+                  <option value="one-dark">One Dark</option>
+                  <option value="github-dark">GitHub Dark</option>
+                  <option value="solarized-dark">Solarized Dark</option>
+                  <option value="night-owl">Night Owl</option>
+                  <option value="tokyo-night">Tokyo Night</option>
                   <option value="light">Light</option>
                 </select>
               </label>
@@ -451,7 +460,7 @@ export function initializeUI(): void {
               </div>
             </div>
           </div>
-          <div class="settings-footer">
+          <div class="settings-footer" id="settings-footer" style="display: none;">
             <button class="modal-btn modal-btn-primary" id="settings-save">Save</button>
           </div>
         </div>
@@ -588,9 +597,17 @@ function setupEventListeners(): void {
     }
 
     // Ctrl/Cmd+P: Toggle preview
-    if (isMod && e.key === 'p') {
+    if (isMod && e.key === 'p' && !e.shiftKey) {
       e.preventDefault()
       togglePreview()
+    }
+
+    // Ctrl/Cmd+Shift+P: Toggle split view
+    if (isMod && e.key === 'P') {
+      e.preventDefault()
+      toggleEditorMode('split')
+      document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.remove('active'))
+      document.querySelector('.view-mode-btn[data-mode="split"]')?.classList.add('active')
     }
 
     // Ctrl/Cmd+S: Save
@@ -1098,12 +1115,12 @@ function setupCodeMirrorEditor(): void {
         state.openTabs[state.activeTabIndex].modified = true
         renderTabs()
       }
-      // Live preview update (only if preview is visible)
+      // Live preview update (only if preview is visible) - instant like Obsidian
       const previewPane = document.getElementById('preview-pane')
       if (previewPane && !previewPane.classList.contains('hidden')) {
         updatePreview()
       }
-    }, 300)
+    }, 50)
   )
 }
 
@@ -1123,7 +1140,11 @@ function updateCursorPosition(): void {
 function toggleEditorMode(mode: string): void {
   const editorPane = document.getElementById('editor-pane')
   const previewPane = document.getElementById('preview-pane')
+  const contentWrapper = document.getElementById('editor-content-wrapper')
   if (!editorPane || !previewPane) return
+
+  // Remove split-view class from wrapper
+  contentWrapper?.classList.remove('split-view')
 
   if (mode === 'edit') {
     editorPane.classList.remove('hidden')
@@ -1131,6 +1152,11 @@ function toggleEditorMode(mode: string): void {
   } else if (mode === 'preview') {
     editorPane.classList.add('hidden')
     previewPane.classList.remove('hidden')
+    updatePreview()
+  } else if (mode === 'split') {
+    editorPane.classList.remove('hidden')
+    previewPane.classList.remove('hidden')
+    contentWrapper?.classList.add('split-view')
     updatePreview()
   }
 }
@@ -2278,7 +2304,7 @@ function setupSettingsModal(): void {
   const openSettings = () => {
     settingsOverlay?.classList.add('active')
     // Show first section by default
-    showSettingsSection('editor')
+    showSettingsSection('appearance')
   }
 
   const closeSettings = () => {
@@ -2293,6 +2319,11 @@ function setupSettingsModal(): void {
     document.querySelectorAll('.settings-section').forEach(sec => {
       sec.classList.toggle('hidden', sec.id !== `settings-section-${section}`)
     })
+    // Show/hide save button based on section
+    const footer = document.getElementById('settings-footer')
+    if (footer) {
+      footer.style.display = section === 'terminal' || section === 'languages' ? 'flex' : 'none'
+    }
   }
 
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
@@ -2302,30 +2333,27 @@ function setupSettingsModal(): void {
     })
   })
 
+  // Apply theme immediately when selection changes
+  themeSelect?.addEventListener('change', () => {
+    if (themeSelect) {
+      document.documentElement.setAttribute('data-theme', themeSelect.value)
+      localStorage.setItem('saga-theme', themeSelect.value)
+    }
+  })
+
   settingsBtn?.addEventListener('click', openSettings)
   settingsClose?.addEventListener('click', closeSettings)
   settingsOverlay?.addEventListener('click', e => {
     if (e.target === settingsOverlay) closeSettings()
   })
 
+  // Save settings for Dev Mode and Code Execution sections
   settingsSave?.addEventListener('click', () => {
-    const fontSize = (document.getElementById('setting-fontsize') as HTMLSelectElement)?.value
-    const wordWrap = (document.getElementById('setting-wordwrap') as HTMLInputElement)?.checked
-    const theme = (document.getElementById('setting-theme') as HTMLSelectElement)?.value
     const terminalEnabled = (
       document.getElementById('setting-terminal-enabled') as HTMLInputElement
     )?.checked
 
-    // Save settings
-    localStorage.setItem('saga-font-size', fontSize || '14')
-    localStorage.setItem('saga-word-wrap', String(wordWrap !== false))
-    localStorage.setItem('saga-theme', theme || 'glass')
     localStorage.setItem('saga-terminal-enabled', String(terminalEnabled))
-
-    // Apply theme immediately
-    document.documentElement.setAttribute('data-theme', theme || 'glass')
-
-    // Update terminal button visibility
     updateTerminalButtonVisibility(terminalEnabled)
 
     closeSettings()

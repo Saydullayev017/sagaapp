@@ -363,18 +363,23 @@ const _codeBlockDecoration = Decoration.line({
 
 const codeBlockStartDecoration = Decoration.line({
   attributes: {
-    style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 8px 52px; border: none;',
+    class: 'cm-code-block-line',
+    style:
+      'background: #1e1e1e; margin: 8px 0 0 0; padding: 8px 16px 8px 52px; border: none; border-radius: 5px 5px 0 0;',
   },
 })
 
 const codeBlockEndDecoration = Decoration.line({
   attributes: {
-    style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 16px 52px; border: none;',
+    class: 'cm-code-block-line',
+    style:
+      'background: #1e1e1e; margin: 0 0 8px 0; padding: 8px 16px 16px 52px; border: none; border-radius: 0 0 5px 5px;',
   },
 })
 
 const codeBlockMiddleDecoration = Decoration.line({
   attributes: {
+    class: 'cm-code-block-line',
     style: 'background: #1e1e1e; margin: 0; padding: 0 16px 0 52px; border: none;',
   },
 })
@@ -973,14 +978,20 @@ export function getEditorContent(view: EditorView): string {
 
 /**
  * Sets the content of the editor
+ * @param view - EditorView instance
+ * @param content - New content to set
  */
 export function setEditorContent(view: EditorView, content: string): void {
+  // Save current cursor position before replacing content
+  const cursorPos = view.state.selection.main.head
   view.dispatch({
     changes: {
       from: 0,
       to: view.state.doc.length,
       insert: content,
     },
+    // Restore cursor position, clamped to content length
+    selection: { anchor: Math.min(cursorPos, content.length) },
   })
 }
 
