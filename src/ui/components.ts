@@ -11,6 +11,11 @@ import {
 import { parseMarkdown } from '../editor/markdown-parser'
 import { debounce, escapeHtml, showNotify } from '../utils/dom'
 
+// Helper to strip file extension for display
+function getDisplayName(fileName: string): string {
+  return fileName.replace(/\.[^/.]+$/, '')
+}
+
 // Types for file tree
 interface TreeNode {
   name: string
@@ -557,7 +562,7 @@ function setupEventListeners(): void {
   })
 
   // Keyboard shortcuts - use window for better capture
-  window.addEventListener('keydown', e => {
+  window.addEventListener('keydown', async e => {
     const isMod = e.ctrlKey || e.metaKey
 
     // Ctrl/Cmd+B: Toggle sidebar (file tree)
@@ -635,6 +640,53 @@ function setupEventListeners(): void {
       const currentIndex = state.terminalIds.indexOf(state.activeTerminal)
       const prevIndex = (currentIndex - 1 + state.terminalIds.length) % state.terminalIds.length
       switchTerminal(state.terminalIds[prevIndex])
+    }
+
+    // Tab: Navigate between files and folders in sidebar
+    if (e.key === 'Tab') {
+      const sidebar = document.getElementById('sidebar')
+      if (sidebar && !sidebar.classList.contains('hidden')) {
+        e.preventDefault()
+
+        const items = Array.from(document.querySelectorAll('.tree-item-content'))
+        if (items.length === 0) return
+
+        let currentIndex = items.findIndex(el => el.classList.contains('active'))
+        if (currentIndex === -1) currentIndex = 0
+
+        let nextIndex: number
+        if (e.shiftKey) {
+          nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1
+        } else {
+          nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1
+        }
+
+        items.forEach(el => el.classList.remove('active'))
+        items[nextIndex].classList.add('active')
+        items[nextIndex].scrollIntoView({ block: 'nearest' })
+      }
+    }
+
+    // Enter: Open file or toggle folder in sidebar
+    if (e.key === 'Enter') {
+      const sidebar = document.getElementById('sidebar')
+      if (sidebar && !sidebar.classList.contains('hidden')) {
+        const items = Array.from(document.querySelectorAll('.tree-item-content'))
+        const activeItem = items.find(el => el.classList.contains('active'))
+        if (activeItem) {
+          e.preventDefault()
+
+          const folderId = activeItem.dataset.folderId
+          const folderPath = activeItem.dataset.path
+          const type = activeItem.dataset.type
+
+          if (type === 'directory' && folderId && folderPath) {
+            await toggleFolder(parseInt(folderId), folderPath)
+          } else if (type === 'file' && folderPath) {
+            await openFileInEditor(folderPath)
+          }
+        }
+      }
     }
   })
 
@@ -954,9 +1006,10 @@ function openInNewTab(filePath: string, content: string): void {
   }
 
   const fileName = filePath.split(/[\\/]/).pop() || 'Untitled'
+  const displayName = getDisplayName(fileName)
   state.openTabs.push({
     path: filePath,
-    name: fileName,
+    name: displayName,
     content: content,
     modified: false,
   })
@@ -1325,7 +1378,7 @@ function renderTreeNodes(nodes: TreeNode[], _depth: number): string {
             <span class="tree-line"></span>
             <span class="tree-toggle" style="visibility: hidden">▶</span>
             <span class="tree-icon">📄</span>
-            <span class="tree-label">${escapeHtml(node.name)}</span>
+            <span class="tree-label">${escapeHtml(getDisplayName(node.name))}</span>
           </div>
         </div>
       `
@@ -1442,7 +1495,7 @@ async function openFileInEditor(filePath: string): Promise<void> {
     const statusFile = document.getElementById('status-file')
     if (statusFile) {
       const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || filePath
-      statusFile.textContent = fileName
+      statusFile.textContent = getDisplayName(fileName)
     }
 
     // Update active file in tree
