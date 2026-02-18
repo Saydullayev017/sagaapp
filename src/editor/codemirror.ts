@@ -364,14 +364,16 @@ const _codeBlockDecoration = Decoration.line({
 const codeBlockStartDecoration = Decoration.line({
   attributes: {
     class: 'cm-code-block-line',
-    style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 8px 52px; border: none;',
+    style:
+      'background: #1e1e1e; margin: 8px 0 0 0; padding: 8px 16px 8px 52px; border: none; border-radius: 5px 5px 0 0;',
   },
 })
 
 const codeBlockEndDecoration = Decoration.line({
   attributes: {
     class: 'cm-code-block-line',
-    style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 16px 52px; border: none;',
+    style:
+      'background: #1e1e1e; margin: 0 0 8px 0; padding: 8px 16px 16px 52px; border: none; border-radius: 0 0 5px 5px;',
   },
 })
 
