@@ -973,14 +973,20 @@ export function getEditorContent(view: EditorView): string {
 
 /**
  * Sets the content of the editor
+ * @param view - EditorView instance
+ * @param content - New content to set
  */
 export function setEditorContent(view: EditorView, content: string): void {
+  // Save current cursor position before replacing content
+  const cursorPos = view.state.selection.main.head
   view.dispatch({
     changes: {
       from: 0,
       to: view.state.doc.length,
       insert: content,
     },
+    // Restore cursor position, clamped to content length
+    selection: { anchor: Math.min(cursorPos, content.length) },
   })
 }
 
