@@ -363,18 +363,21 @@ const _codeBlockDecoration = Decoration.line({
 
 const codeBlockStartDecoration = Decoration.line({
   attributes: {
+    class: 'cm-code-block-line',
     style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 8px 52px; border: none;',
   },
 })
 
 const codeBlockEndDecoration = Decoration.line({
   attributes: {
+    class: 'cm-code-block-line',
     style: 'background: #1e1e1e; margin: 0; padding: 8px 16px 16px 52px; border: none;',
   },
 })
 
 const codeBlockMiddleDecoration = Decoration.line({
   attributes: {
+    class: 'cm-code-block-line',
     style: 'background: #1e1e1e; margin: 0; padding: 0 16px 0 52px; border: none;',
   },
 })
